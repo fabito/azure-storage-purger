@@ -22,10 +22,11 @@ func GetMaximumPartitionKeyToDelete(purgeRecordsOlderThanDays int) string {
 	today := time.Now().UTC()
 	then := today.AddDate(0, 0, -1*purgeRecordsOlderThanDays)
 	ticks := TicksFromTime(then)
-	return ticksAscendingWithLeadingZero(ticks)
+	return TicksAscendingWithLeadingZero(ticks)
 }
 
-func ticksAscendingWithLeadingZero(ticks int64) string {
+// TicksAscendingWithLeadingZero asdf
+func TicksAscendingWithLeadingZero(ticks int64) string {
 	s := fmt.Sprint("0", strconv.FormatInt(ticks, 10))
 	ticksStr := rightPad2Len(s, "0", 19)
 	return ticksStr

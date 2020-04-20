@@ -29,7 +29,7 @@ func TestTicksFromTime2(t *testing.T) {
 
 func TestTicksAscendingWithLeadingZero(t *testing.T) {
 	base := time.Date(2018, 4, 26, 8, 44, 39, 280577, time.UTC)
-	ticks := ticksAscendingWithLeadingZero(TicksFromTime(base))
+	ticks := TicksAscendingWithLeadingZero(TicksFromTime(base))
 	assert.Equal(t, "0636603290790000000", ticks)
 }
 

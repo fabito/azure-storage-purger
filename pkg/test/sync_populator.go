@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fabito/azure-storage-purger/pkg/purger"
+
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
@@ -28,7 +30,7 @@ func getPartitions(table *storage.Table, dateList []time.Time) []*partition {
 	max := 150
 
 	for _, m := range dateList {
-		partitionKey := ticksAscendingWithLeadingZero(TicksFromTime(m))
+		partitionKey := purger.TicksAscendingWithLeadingZero(purger.TicksFromTime(m))
 		entitiesPerPartitionCount := rand.Intn(max-min+1) + min
 		p := &partition{
 			key:      partitionKey,
