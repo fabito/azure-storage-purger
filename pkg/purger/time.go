@@ -31,10 +31,21 @@ func ticksAscendingWithLeadingZero(ticks int64) string {
 	return ticksStr
 }
 
+func timeFromTicksAscendingWithLeadingZero(ticksStr string) time.Time {
+	ticks, _ := strconv.ParseInt(ticksStr, 10, 64)
+	return TimeFromTicks(ticks)
+}
+
 // TimeFromTicks convert ticks to time
 func TimeFromTicks(ticks int64) time.Time {
 	base := time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 	return time.Unix(ticks/10000000+base, ticks%10000000).UTC()
+}
+
+// TicksFromTime2 converts time to ticks
+func TicksFromTime2(t time.Time) int64 {
+	ticks := t.UTC().UnixNano() / 100
+	return ticks + ticksAtEpock
 }
 
 // TicksFromTime converts time to ticks

@@ -12,7 +12,8 @@ type AzureTablePurger interface {
 	PurgeEntities()
 }
 
-type defaultTablePurger struct {
+// DefaultTablePurger default table purger
+type DefaultTablePurger struct {
 	storageAccountName         string
 	storageAccountKey          string
 	tableName                  string
@@ -42,7 +43,7 @@ func NewTablePurger(accountName, accountKey, tableName string, purgeEntitiesOlde
 }
 
 // PurgeEntities sdf
-func (d *defaultTablePurger) PurgeEntities() {
+func (d *DefaultTablePurger) PurgeEntities() {
 
 	partitionKey := GetMaximumPartitionKeyToDelete(d.purgeEntitiesOlderThanDays)
 	queryOptions := &storage.QueryOptions{}
@@ -66,7 +67,7 @@ func (d *defaultTablePurger) PurgeEntities() {
 
 }
 
-func (d *defaultTablePurger) processEntities(queryResult *storage.EntityQueryResult) {
+func (d *DefaultTablePurger) processEntities(queryResult *storage.EntityQueryResult) {
 	rowCount := len(queryResult.Entities)
 	fmt.Println(rowCount)
 
@@ -91,11 +92,13 @@ func (d *defaultTablePurger) processEntities(queryResult *storage.EntityQueryRes
 	}
 }
 
-func (d *defaultTablePurger) purge(partitionKey string, entities []*storage.Entity) {
+func (d *DefaultTablePurger) purge(partitionKey string, entities []*storage.Entity) {
 	tableBatch := d.table.NewBatch()
 	for _, entity := range entities {
 		tableBatch.DeleteEntityByForce(entity, true)
 	}
-	fmt.Println(len(tableBatch.BatchEntitySlice))
-	// tableBatch.ExecuteBatch()
+
+	fmt.Printf(" %s : %d\n", timeFromTicksAscendingWithLeadingZero(tableBatch.BatchEntitySlice[0].PartitionKey), len(tableBatch.BatchEntitySlice))
+
+	tableBatch.ExecuteBatch()
 }

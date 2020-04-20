@@ -20,8 +20,27 @@ func TestTicksFromTime(t *testing.T) {
 	assert.Equal(t, int64(636603290790000000), ticks)
 }
 
+func TestTicksFromTime2(t *testing.T) {
+	base := time.Date(2020, 4, 19, 23, 13, 25, 4987531, time.UTC)
+	ticks := TicksFromTime2(base)
+	// assert.Equal(t, int64(637229348054987531), ticks)
+	assert.Equal(t, int64(637229348050049875), ticks)
+}
+
 func TestTicksAscendingWithLeadingZero(t *testing.T) {
 	base := time.Date(2018, 4, 26, 8, 44, 39, 280577, time.UTC)
 	ticks := ticksAscendingWithLeadingZero(TicksFromTime(base))
 	assert.Equal(t, "0636603290790000000", ticks)
+}
+
+func TestTimeFromTicksAscendingWithLeadingZero(t *testing.T) {
+	expected := time.Date(2018, 4, 26, 8, 44, 39, 0, time.UTC)
+	actual := timeFromTicksAscendingWithLeadingZero("0636603290790000000")
+	assert.Equal(t, expected, actual)
+}
+
+func TestTimeFromTicksAscendingWithLeadingZero2(t *testing.T) {
+	expected := time.Date(2020, 4, 19, 23, 13, 25, 4987531, time.UTC)
+	actual := timeFromTicksAscendingWithLeadingZero("0637229348054987531")
+	assert.Equal(t, expected, actual)
 }
