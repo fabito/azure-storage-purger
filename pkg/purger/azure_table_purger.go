@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
@@ -77,7 +77,7 @@ type Partition struct {
 // PurgeEntities sdf
 func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 	if d.dryRun {
-		logrus.Info("Dry run is enabled")
+		log.Info("Dry run is enabled")
 	}
 
 	done := make(chan interface{})
@@ -87,7 +87,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		purgeResult.addPageCount()
 		go func(r QueryResult) {
 			if r.Error != nil {
-				logrus.Warn("Error while querying table", r.Error)
+				log.Warn("Error while querying table", r.Error)
 			} else {
 				d.processEntities(done, r)
 			}
@@ -100,12 +100,16 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 func (d *DefaultTablePurger) queryResults(done <-chan interface{}, timeout uint) <-chan QueryResult {
 	queryResultStream := make(chan QueryResult)
 	partitionKey := GetMaximumPartitionKeyToDelete(d.purgeEntitiesOlderThanDays)
+
 	queryOptions := &storage.QueryOptions{}
 	queryOptions.Filter = fmt.Sprintf("PartitionKey le '%s'", partitionKey)
 	queryOptions.Select = []string{"PartitionKey", "RowKey"}
 	tableOptions := &storage.TableOptions{}
+	log.Infof("Querying all records older than %d days", d.purgeEntitiesOlderThanDays)
+	log.Info("Query options", queryOptions)
 	go func() {
 		defer close(queryResultStream)
+		log.Debug("Fetching page")
 		result, err := d.table.QueryEntities(timeout, storage.NoMetadata, queryOptions)
 		queryResult := QueryResult{Error: err, EntityQueryResult: result}
 		select {
@@ -115,6 +119,7 @@ func (d *DefaultTablePurger) queryResults(done <-chan interface{}, timeout uint)
 		}
 
 		for result.QueryNextLink.NextLink != nil {
+			log.Debug("Fetching next page")
 			result, err = result.NextResults(tableOptions)
 			queryResult := QueryResult{Error: err, EntityQueryResult: result}
 			select {
@@ -130,6 +135,7 @@ func (d *DefaultTablePurger) queryResults(done <-chan interface{}, timeout uint)
 func (d *DefaultTablePurger) processEntities(done <-chan interface{}, queryResult QueryResult) {
 	for batch := range d.batches(done, d.partitions(done, queryResult)) {
 		go func(batch *storage.TableBatch) {
+			log.Debugf("Executing batch with size %d", len(batch.BatchEntitySlice))
 			if !d.dryRun {
 				batch.ExecuteBatch()
 			}
@@ -146,6 +152,7 @@ func (d *DefaultTablePurger) partitions(done <-chan interface{}, result QueryRes
 		for _, entity := range result.EntityQueryResult.Entities {
 			m[entity.PartitionKey] = append(m[entity.PartitionKey], entity)
 		}
+		log.Debugf("Partioning result: %d", len(m))
 		for k, v := range m {
 			partition := Partition{key: k, entities: v}
 			select {

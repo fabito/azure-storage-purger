@@ -1,11 +1,12 @@
 package test
 
 import (
-	"log"
 	"math/rand"
 	"strconv"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/fabito/azure-storage-purger/pkg/purger"
 
@@ -100,8 +101,6 @@ func createTable(storageAccountName, storageAccountKey, tableName string) (*stor
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		return nil, err
 	}
 
 	return table, nil
@@ -109,7 +108,12 @@ func createTable(storageAccountName, storageAccountKey, tableName string) (*stor
 
 // PopulateTable populates table with dummy test data
 func PopulateTable(storageAccountName, storageAccountKey, tableName string) error {
-	table, _ := createTable(storageAccountName, storageAccountKey, tableName)
+	table, err := createTable(storageAccountName, storageAccountKey, tableName)
+
+	if err != nil {
+		return err
+	}
+
 	var wg sync.WaitGroup
 
 	start := time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC)
