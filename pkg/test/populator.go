@@ -17,11 +17,17 @@ func dates(start, end time.Time) chan time.Time {
 	yield := make(chan time.Time)
 	go func() {
 		defer close(yield)
-		for y := start; y.Year() <= end.Year(); y = y.AddDate(1, 0, 0) {
-			for m := y; m.Year() == y.Year(); m = m.AddDate(0, 1, 0) {
-				yield <- m
-			}
+		for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
+			yield <- d
 		}
+		// for y := start; y.Year() <= end.Year(); y = y.AddDate(1, 0, 0) {
+		// 	for m := y; m.Year() == y.Year(); m = m.AddDate(0, 1, 0) {
+		// 		for d := m; m.Year() == y.Year(); m = m.AddDate(0, 1, 0) {
+
+		// 			yield <- m
+		// 		}
+		// 	}
+		// }
 	}()
 	return yield
 }
@@ -31,11 +37,11 @@ type partition struct {
 	entities []*storage.Entity
 }
 
-func partitions(table *storage.Table, dates chan time.Time) chan *partition {
+func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates chan time.Time) chan *partition {
 	yield := make(chan *partition)
 	rand.Seed(time.Now().UnixNano())
 	min := 1
-	max := 150
+	max := maxNumberOfEntitiesPerPartition
 	go func() {
 		defer close(yield)
 		for m := range dates {
@@ -107,7 +113,7 @@ func createTable(storageAccountName, storageAccountKey, tableName string) (*stor
 }
 
 // PopulateTable populates table with dummy test data
-func PopulateTable(storageAccountName, storageAccountKey, tableName string) error {
+func PopulateTable(storageAccountName, storageAccountKey, tableName string, maxNumberOfEntitiesPerPartition int) error {
 	table, err := createTable(storageAccountName, storageAccountKey, tableName)
 
 	if err != nil {
@@ -117,9 +123,9 @@ func PopulateTable(storageAccountName, storageAccountKey, tableName string) erro
 	var wg sync.WaitGroup
 
 	start := time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Now().UTC()
 
-	for batch := range batches(table, partitions(table, dates(start, end))) {
+	for batch := range batches(table, partitions(table, maxNumberOfEntitiesPerPartition, dates(start, end))) {
 		wg.Add(1)
 		go func(batch2 *storage.TableBatch) {
 			batch2.ExecuteBatch()

@@ -2,6 +2,7 @@ package purger
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -82,17 +83,23 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 
 	done := make(chan interface{})
 	defer close(done)
+	var wg sync.WaitGroup
 	purgeResult := PurgeResult{StartTime: time.Now().UTC()}
-	for queryResult := range d.queryResults(done, 120) {
-		purgeResult.addPageCount()
-		go func(r QueryResult) {
-			if r.Error != nil {
-				log.Warn("Error while querying table", r.Error)
-			} else {
-				d.processEntities(done, r)
+
+	for batch := range d.batches(done, d.partitions2(done, d.queryResults(done, 120))) {
+		wg.Add(1)
+		go func(batch *storage.TableBatch) {
+			log.Debugf("Executing batch with size %d", len(batch.BatchEntitySlice))
+			if !d.dryRun {
+				err := batch.ExecuteBatch()
+				if err != nil {
+					log.Error(err)
+				}
 			}
-		}(queryResult)
+			wg.Done()
+		}(batch)
 	}
+	wg.Wait()
 	purgeResult.EndTime = time.Now().UTC()
 	return purgeResult, nil
 }
@@ -132,33 +139,23 @@ func (d *DefaultTablePurger) queryResults(done <-chan interface{}, timeout uint)
 	return queryResultStream
 }
 
-func (d *DefaultTablePurger) processEntities(done <-chan interface{}, queryResult QueryResult) {
-	for batch := range d.batches(done, d.partitions(done, queryResult)) {
-		go func(batch *storage.TableBatch) {
-			log.Debugf("Executing batch with size %d", len(batch.BatchEntitySlice))
-			if !d.dryRun {
-				batch.ExecuteBatch()
-			}
-		}(batch)
-	}
-}
-
-func (d *DefaultTablePurger) partitions(done <-chan interface{}, result QueryResult) <-chan Partition {
+func (d *DefaultTablePurger) partitions2(done <-chan interface{}, queryResults <-chan QueryResult) <-chan Partition {
 	yield := make(chan Partition)
 	go func() {
 		defer close(yield)
-		// group entities by PartitionKey
-		m := make(map[string][]*storage.Entity)
-		for _, entity := range result.EntityQueryResult.Entities {
-			m[entity.PartitionKey] = append(m[entity.PartitionKey], entity)
-		}
-		log.Debugf("Partioning result: %d", len(m))
-		for k, v := range m {
-			partition := Partition{key: k, entities: v}
-			select {
-			case <-done:
-				return
-			case yield <- partition:
+		for result := range queryResults {
+			m := make(map[string][]*storage.Entity)
+			for _, entity := range result.EntityQueryResult.Entities {
+				m[entity.PartitionKey] = append(m[entity.PartitionKey], entity)
+			}
+			log.Debugf("Partioning result: %d", len(m))
+			for k, v := range m {
+				partition := Partition{key: k, entities: v}
+				select {
+				case <-done:
+					return
+				case yield <- partition:
+				}
 			}
 		}
 	}()
@@ -171,6 +168,7 @@ func (d *DefaultTablePurger) batches(done <-chan interface{}, partitions <-chan 
 	go func() {
 		defer close(yield)
 		for p := range partitions {
+			log.Debugf("Chunkfying %s with %d entitie(s)", p.key, len(p.entities))
 			entities := p.entities
 			count := len(entities)
 			for i := 0; i < count; i += chunkSize {

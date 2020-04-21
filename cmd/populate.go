@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var maxNumberOfEntitiesPerPartition int
+
 // populateCmd represents the populate command
 var populateCmd = &cobra.Command{
 	Use:   "populate",
@@ -15,7 +17,7 @@ var populateCmd = &cobra.Command{
 	Long:  `This is used for testing the purge command`,
 	Run: func(cmd *cobra.Command, args []string) {
 		logrus.Info("Starting populate")
-		err := test.PopulateTable(accountName, accountKey, tableName)
+		err := test.PopulateTable(accountName, accountKey, tableName, maxNumberOfEntitiesPerPartition)
 		if err != nil {
 			logrus.Fatal(err)
 			os.Exit(1)
@@ -25,4 +27,7 @@ var populateCmd = &cobra.Command{
 
 func init() {
 	tableCmd.AddCommand(populateCmd)
+
+	populateCmd.Flags().IntVar(&maxNumberOfEntitiesPerPartition, "max-num-entities", 1, "Number of entities per partition")
+	populateCmd.MarkFlagRequired("max-num-entities")
 }
