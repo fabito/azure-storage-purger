@@ -93,7 +93,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 			if !d.dryRun {
 				err := batch.ExecuteBatch()
 				if err != nil {
-					log.Error(err)
+					log.Errorf("Error executing batch: %#v", err)
 				}
 			}
 			wg.Done()
