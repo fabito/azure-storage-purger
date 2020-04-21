@@ -2,10 +2,15 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/spf13/cobra"
 )
+
+var v string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -28,6 +33,23 @@ func Execute() {
 	}
 }
 
+func setUpLogs(out io.Writer, level string) error {
+	logrus.SetOutput(out)
+	lvl, err := logrus.ParseLevel(level)
+	if err != nil {
+		return err
+	}
+	logrus.SetLevel(lvl)
+	return nil
+}
+
 func init() {
 	cobra.OnInitialize()
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if err := setUpLogs(os.Stdout, v); err != nil {
+			return err
+		}
+		return nil
+	}
+	rootCmd.PersistentFlags().StringVarP(&v, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic")
 }
