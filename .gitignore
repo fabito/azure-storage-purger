@@ -20,3 +20,5 @@ Vagrantfile
 
 cmd/az-table-purger
 azurite/
+bin/
+_dist/

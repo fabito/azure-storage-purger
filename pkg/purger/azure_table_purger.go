@@ -43,7 +43,7 @@ func NewTablePurger(accountName, accountKey, tableName string, purgeEntitiesOlde
 }
 
 // PurgeEntities sdf
-func (d *DefaultTablePurger) PurgeEntities() {
+func (d *DefaultTablePurger) PurgeEntities() error {
 
 	partitionKey := GetMaximumPartitionKeyToDelete(d.purgeEntitiesOlderThanDays)
 	queryOptions := &storage.QueryOptions{}
@@ -54,7 +54,7 @@ func (d *DefaultTablePurger) PurgeEntities() {
 	result, err := d.table.QueryEntities(120, storage.FullMetadata, queryOptions)
 	if err != nil {
 		log.Fatal(err)
-		return
+		return err
 	}
 
 	d.processEntities(result)
@@ -65,6 +65,7 @@ func (d *DefaultTablePurger) PurgeEntities() {
 		d.processEntities(result)
 	}
 
+	return nil
 }
 
 func (d *DefaultTablePurger) processEntities(queryResult *storage.EntityQueryResult) {
@@ -92,7 +93,7 @@ func (d *DefaultTablePurger) processEntities(queryResult *storage.EntityQueryRes
 	}
 }
 
-func (d *DefaultTablePurger) purge(partitionKey string, entities []*storage.Entity) {
+func (d *DefaultTablePurger) purge(partitionKey string, entities []*storage.Entity) error {
 	tableBatch := d.table.NewBatch()
 	for _, entity := range entities {
 		tableBatch.DeleteEntityByForce(entity, true)
@@ -100,5 +101,10 @@ func (d *DefaultTablePurger) purge(partitionKey string, entities []*storage.Enti
 
 	fmt.Printf(" %s : %d\n", timeFromTicksAscendingWithLeadingZero(tableBatch.BatchEntitySlice[0].PartitionKey), len(tableBatch.BatchEntitySlice))
 
-	tableBatch.ExecuteBatch()
+	err := tableBatch.ExecuteBatch()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
