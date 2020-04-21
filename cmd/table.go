@@ -19,12 +19,12 @@ var tableCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(tableCmd)
-	tableCmd.PersistentFlags().StringVar(&accountName, "accountName", "", "The storage account name")
-	tableCmd.MarkFlagRequired("accountName")
+	tableCmd.PersistentFlags().StringVar(&accountName, "account-name", "", "The storage account name")
+	tableCmd.MarkPersistentFlagRequired("account-name")
 
-	tableCmd.PersistentFlags().StringVar(&accountKey, "accountKey", "", "The storage account key")
-	tableCmd.MarkFlagRequired("accountKey")
+	tableCmd.PersistentFlags().StringVar(&accountKey, "account-key", "", "The storage account key")
+	tableCmd.MarkPersistentFlagRequired("account-key")
 
-	tableCmd.PersistentFlags().StringVar(&tableName, "tableName", "", "The storage table name")
-	tableCmd.MarkFlagRequired("tableName")
+	tableCmd.PersistentFlags().StringVar(&tableName, "table-name", "", "The storage table name")
+	tableCmd.MarkPersistentFlagRequired("table-name")
 }

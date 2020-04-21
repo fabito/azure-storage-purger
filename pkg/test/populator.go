@@ -36,6 +36,7 @@ func partitions(table *storage.Table, dates chan time.Time) chan *partition {
 	min := 1
 	max := 150
 	go func() {
+		defer close(yield)
 		for m := range dates {
 			partitionKey := purger.TicksAscendingWithLeadingZero(purger.TicksFromTime(m))
 			entitiesPerPartitionCount := rand.Intn(max-min+1) + min
@@ -54,7 +55,6 @@ func partitions(table *storage.Table, dates chan time.Time) chan *partition {
 			}
 			yield <- p
 		}
-		close(yield)
 	}()
 	return yield
 }
@@ -64,6 +64,7 @@ func batches(table *storage.Table, partitions chan *partition) chan *storage.Tab
 	chunkSize := 100
 
 	go func() {
+		defer close(yield)
 		for p := range partitions {
 			entities := p.entities
 			count := len(entities)
@@ -79,7 +80,6 @@ func batches(table *storage.Table, partitions chan *partition) chan *storage.Tab
 				yield <- tableBatch
 			}
 		}
-		close(yield)
 	}()
 
 	return yield

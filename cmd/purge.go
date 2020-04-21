@@ -10,6 +10,7 @@ import (
 
 var (
 	purgeEntitiesOlderThanDays int
+	dryRun                     bool
 )
 
 // purgeCmd represents the purge command
@@ -18,24 +19,25 @@ var purgeCmd = &cobra.Command{
 	Short: "Purges entities older than purgeEntitiesOlderThanDays",
 	Long:  `Purges entities older than purgeEntitiesOlderThanDays`,
 	Run: func(cmd *cobra.Command, args []string) {
-		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays)
-
+		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, dryRun)
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)
 		}
 
-		err = purger.PurgeEntities()
+		result, err := purger.PurgeEntities()
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)
 		}
-
+		log.Println(result)
 	},
 }
 
 func init() {
 	tableCmd.AddCommand(purgeCmd)
-	populateCmd.LocalNonPersistentFlags().IntVar(&purgeEntitiesOlderThanDays, "purgeEntitiesOlderThanDays", 30, "A help for foo")
-	populateCmd.MarkFlagRequired("purgeEntitiesOlderThanDays")
+	purgeCmd.Flags().IntVar(&purgeEntitiesOlderThanDays, "num-days", 365, "Number of days to keep")
+	purgeCmd.MarkFlagRequired("num-days")
+	purgeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Enable dry run mode")
+	purgeCmd.MarkFlagRequired("dry-run")
 }
