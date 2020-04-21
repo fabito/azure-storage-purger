@@ -28,7 +28,7 @@ var purgeCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Info("Result", result)
+		log.Infof("%#v", result)
 	},
 }
 
