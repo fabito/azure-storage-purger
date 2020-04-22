@@ -1,7 +1,6 @@
 package purger
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -60,7 +59,7 @@ func TestSplitPeriodsEven(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[1].End)
 
-	fmt.Print(splits)
+	logPeriods(splits)
 }
 
 func TestSplitPeriodsOdd(t *testing.T) {
@@ -77,7 +76,7 @@ func TestSplitPeriodsOdd(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[2].End)
 
-	fmt.Print(splits)
+	logPeriods(splits)
 }
 
 func TestSplitPeriodsSpecific(t *testing.T) {
@@ -97,7 +96,7 @@ func TestSplitPeriodsSpecific(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[15].End)
 
-	fmt.Print(splits)
+	logPeriods(splits)
 }
 
 func TestSplitPeriodsOneDay(t *testing.T) {
@@ -117,5 +116,5 @@ func TestSplitPeriodsOneDay(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[15].End)
 
-	fmt.Print(splits)
+	logPeriods(splits)
 }

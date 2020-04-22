@@ -44,7 +44,13 @@ func (p *Period) SplitsFrom(numSplits int) []Period {
 }
 
 func (p Period) String() string {
-	return fmt.Sprintf("From %s to %s", p.Start, p.End)
+	return fmt.Sprintf("%s -> %s (%s)", p.Start.Format(time.RFC3339), p.End.Format(time.RFC3339), p.Duration())
+}
+
+func logPeriods(splits []Period) {
+	for index, period := range splits {
+		log.Infof("#%d: %s", index, period)
+	}
 }
 
 func rightPad2Len(s string, padStr string, overallLen int) string {
@@ -90,10 +96,4 @@ func TicksFromTime2(t time.Time) int64 {
 func TicksFromTime(t time.Time) int64 {
 	millis := t.UTC().UnixNano() / 1000000
 	return (millis * ticksPerMillisecond) + ticksAtEpock
-}
-
-func logPeriods(splits []Period) {
-	for index, period := range splits {
-		log.Infof("#%d: %s -> %s (%s)", index, period.Start.Format(time.RFC3339), period.End.Format(time.RFC3339), period.Duration())
-	}
 }

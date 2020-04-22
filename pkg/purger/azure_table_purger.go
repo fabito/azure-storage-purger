@@ -327,9 +327,3 @@ func (d *DefaultTablePurger) periodQueryOptionsGenerator2(done <-chan interface{
 	}()
 	return queryOptionsStream
 }
-
-func logSplits(splits []Period) {
-	for index, period := range splits {
-		log.Infof("Split #%d: %s -> %s", index, period.Start.Format(time.RFC3339), period.End.Format(time.RFC3339))
-	}
-}
