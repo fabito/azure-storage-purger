@@ -41,7 +41,7 @@ func init() {
 	purgeCmd.Flags().IntVar(&purgeEntitiesOlderThanDays, "num-days-to-keep", 365, "Number of days to keep")
 	purgeCmd.MarkFlagRequired("num-days-to-keep")
 
-	purgeCmd.Flags().IntVar(&periodLengthInDays, "num-days-per-worker", 1, "Number of days per worker")
+	purgeCmd.Flags().IntVar(&periodLengthInDays, "num-days-per-worker", 90, "Number of days per worker")
 	purgeCmd.MarkFlagRequired("num-days-per-worker")
 
 	purgeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Enable dry run mode")

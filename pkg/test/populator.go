@@ -20,14 +20,6 @@ func dates(start, end time.Time) chan time.Time {
 		for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
 			yield <- d
 		}
-		// for y := start; y.Year() <= end.Year(); y = y.AddDate(1, 0, 0) {
-		// 	for m := y; m.Year() == y.Year(); m = m.AddDate(0, 1, 0) {
-		// 		for d := m; m.Year() == y.Year(); m = m.AddDate(0, 1, 0) {
-
-		// 			yield <- m
-		// 		}
-		// 	}
-		// }
 	}()
 	return yield
 }
@@ -102,9 +94,11 @@ func createTable(storageAccountName, storageAccountKey, tableName string) (*stor
 	table := tableService.GetTableReference(tableName)
 
 	if err := table.Get(5, storage.MinimalMetadata); err != nil {
+		log.Infof("Table %s doesn't exist. Creating...", tableName)
 		options := &storage.TableOptions{}
 		err := table.Create(5, storage.MinimalMetadata, options)
 		if err != nil {
+			log.Errorf("Error creating table %s", tableName)
 			return nil, err
 		}
 	}
@@ -113,25 +107,25 @@ func createTable(storageAccountName, storageAccountKey, tableName string) (*stor
 }
 
 // PopulateTable populates table with dummy test data
-func PopulateTable(storageAccountName, storageAccountKey, tableName string, maxNumberOfEntitiesPerPartition int) error {
+func PopulateTable(storageAccountName, storageAccountKey, tableName string, startDate, endDate time.Time, maxNumberOfEntitiesPerPartition int) error {
 	table, err := createTable(storageAccountName, storageAccountKey, tableName)
 
 	if err != nil {
 		return err
 	}
 
+	log.Infof("Start %s population.", tableName)
+	log.Infof("Generating data from %s to %s", startDate, endDate)
+
 	var wg sync.WaitGroup
-
-	start := time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Now().UTC()
-
-	for batch := range batches(table, partitions(table, maxNumberOfEntitiesPerPartition, dates(start, end))) {
+	for batch := range batches(table, partitions(table, maxNumberOfEntitiesPerPartition, dates(startDate, endDate))) {
 		wg.Add(1)
-		go func(batch2 *storage.TableBatch) {
-			batch2.ExecuteBatch()
+		go func(batch *storage.TableBatch) {
+			batch.ExecuteBatch()
 			wg.Done()
 		}(batch)
 	}
 	wg.Wait()
+
 	return nil
 }
