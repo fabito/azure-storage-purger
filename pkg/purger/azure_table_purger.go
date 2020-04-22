@@ -52,7 +52,6 @@ func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, ta
 		purgeEntitiesOlderThanDays: purgeEntitiesOlderThanDays,
 		periodLengthInDays:         periodLengthInDays,
 		dryRun:                     dryRun,
-		result:                     PurgeResult{StartTime: time.Now().UTC()},
 	}
 	tableService := client.GetTableService()
 	table := tableService.GetTableReference(purger.tableName)
@@ -84,9 +83,9 @@ type Partition struct {
 // PurgeEntities sdf
 func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 	if d.dryRun {
-		log.Info("Dry run is enabled")
+		log.Warn("Dry run is ENABLED")
 	}
-
+	d.result = PurgeResult{StartTime: time.Now().UTC()}
 	done := make(chan interface{})
 	defer close(done)
 	var timeout uint = 120
@@ -140,40 +139,6 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 
 	d.result.end()
 	return d.result, nil
-}
-
-func (d *DefaultTablePurger) queryResults(done <-chan interface{}, timeout uint) <-chan QueryResult {
-	queryResultStream := make(chan QueryResult)
-	partitionKey := GetMaximumPartitionKeyToDelete(d.purgeEntitiesOlderThanDays)
-	queryOptions := &storage.QueryOptions{}
-	queryOptions.Filter = fmt.Sprintf("PartitionKey le '%s'", partitionKey)
-	queryOptions.Select = []string{"PartitionKey", "RowKey"}
-	tableOptions := &storage.TableOptions{}
-	log.Infof("Querying all records older than %d days", d.purgeEntitiesOlderThanDays)
-	log.Info("Query options", queryOptions)
-	go func() {
-		defer close(queryResultStream)
-		log.Debug("Fetching page")
-		result, err := d.table.QueryEntities(timeout, storage.NoMetadata, queryOptions)
-		queryResult := QueryResult{Error: err, EntityQueryResult: result}
-		select {
-		case <-done:
-			return
-		case queryResultStream <- queryResult:
-		}
-
-		for result.QueryNextLink.NextLink != nil {
-			log.Debug("Fetching next page")
-			result, err = result.NextResults(tableOptions)
-			queryResult := QueryResult{Error: err, EntityQueryResult: result}
-			select {
-			case <-done:
-				return
-			case queryResultStream <- queryResult:
-			}
-		}
-	}()
-	return queryResultStream
 }
 
 func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, queryOptionsStream <-chan *storage.QueryOptions, timeout uint) <-chan QueryResult {
@@ -237,9 +202,9 @@ func (d *DefaultTablePurger) batches(done <-chan interface{}, partitions <-chan 
 	go func() {
 		defer close(yield)
 		for p := range partitions {
-			log.Debugf("Chunkfying %s with %d entitie(s)", p.key, len(p.entities))
 			entities := p.entities
 			count := len(entities)
+			log.Debugf("Chunkfying partition (%s) with %d entitie(s)", p.key, count)
 			for i := 0; i < count; i += chunkSize {
 				end := i + chunkSize
 				if end > count {
@@ -296,7 +261,7 @@ func (d *DefaultTablePurger) periodQueryOptionsGenerator(done <-chan interface{}
 				to = time.Date(to.Year(), to.Month(), to.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
 			}
 
-			log.Infof("Generating queries from %s to %s", from, to)
+			log.Infof("Generating query: from %s to %s", from, to)
 			fromTicks := TicksAscendingWithLeadingZero(TicksFromTime(from))
 			toTicks := TicksAscendingWithLeadingZero(TicksFromTime(to))
 			queryOptions := &storage.QueryOptions{}

@@ -30,9 +30,9 @@ var purgeCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		log.Debugf("%#v", result)
-		log.Infof("Finished purge job in %s", result.EndTime.Sub(result.StartTime))
-		log.Infof("Deleted %d entitie(s) in %d batch(es)", result.RowCount, result.BatchCount)
-		log.Infof("Requested %d page(s)", result.PageCount)
+		log.Infof("It took %s", result.EndTime.Sub(result.StartTime))
+		log.Infof("To deleted %d entity(ies) in %d batch(es)", result.RowCount, result.BatchCount)
+		log.Infof("Total requested %d page(s)", result.PageCount)
 	},
 }
 
