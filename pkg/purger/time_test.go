@@ -1,6 +1,7 @@
 package purger
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -43,4 +44,38 @@ func TestTimeFromTicksAscendingWithLeadingZero2(t *testing.T) {
 	expected := time.Date(2020, 4, 19, 23, 13, 25, 4987531, time.UTC)
 	actual := timeFromTicksAscendingWithLeadingZero("0637229348054987531")
 	assert.Equal(t, expected, actual)
+}
+
+func TestSplitPeriodsEven(t *testing.T) {
+	start := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	p := Period{Start: start, End: end}
+	splits := p.SplitsFrom(2)
+
+	assert.Equal(t, 2, len(splits))
+	assert.Equal(t, start, splits[0].Start)
+	assert.True(t, splits[0].End.After(splits[0].Start))
+	assert.True(t, splits[0].End.Before(splits[1].Start))
+	assert.True(t, splits[1].End.After(splits[1].Start))
+	assert.Equal(t, end, splits[1].End)
+
+	fmt.Print(splits)
+}
+
+func TestSplitPeriodsOdd(t *testing.T) {
+	start := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	p := Period{Start: start, End: end}
+	splits := p.SplitsFrom(3)
+
+	assert.Equal(t, 3, len(splits))
+	assert.Equal(t, start, splits[0].Start)
+	assert.True(t, splits[0].End.After(splits[0].Start))
+	assert.True(t, splits[0].End.Before(splits[1].Start))
+	assert.True(t, splits[1].End.After(splits[1].Start))
+	assert.Equal(t, end, splits[2].End)
+
+	fmt.Print(splits)
 }

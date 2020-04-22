@@ -10,6 +10,38 @@ import (
 const ticksAtEpock int64 = 621355968000000000
 const ticksPerMillisecond int64 = 10000
 
+// Period represet a period iof time
+type Period struct {
+	Start time.Time
+	End   time.Time
+}
+
+// SplitsFrom dsfg
+func (p *Period) SplitsFrom(numSplits int) []Period {
+	splits := make([]Period, numSplits)
+	duration := p.End.Sub(p.Start).Milliseconds()
+	segmentLength := duration / int64(numSplits)
+	s := p.Start
+	for i := 1; i <= numSplits; i++ {
+		step := time.Duration(segmentLength) * time.Millisecond
+		var e time.Time
+		if i == numSplits {
+			e = p.End
+		} else {
+			e = s.Add(step)
+		}
+		if s.Before(e) {
+			splits[i-1] = Period{Start: s, End: e}
+			s = e.AddDate(0, 0, 1)
+		}
+	}
+	return splits
+}
+
+func (p Period) String() string {
+	return fmt.Sprintf("%#v", p)
+}
+
 func rightPad2Len(s string, padStr string, overallLen int) string {
 	var padCountInt int
 	padCountInt = 1 + ((overallLen - len(padStr)) / len(padStr))

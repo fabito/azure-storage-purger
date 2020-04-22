@@ -3,6 +3,7 @@ package purger
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -114,7 +115,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		go func() {
 			defer close(processedBatchStream)
 			for batch := range batches {
-				log.Debugf("Executing batch with size %d", len(batch.BatchEntitySlice))
+				log.Debugf("Executing table batch with size %d", len(batch.BatchEntitySlice))
 				if !d.dryRun {
 					err := batch.ExecuteBatch()
 					if err != nil {
@@ -131,8 +132,18 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		return processedBatchStream
 	}
 
-	batches := d.batches(done, d.partitions(done, d.queryResultsGenerator(done, d.periodQueryOptionsGenerator(done, start, end, d.periodLengthInDays), timeout)))
-	for processedBatch := range process(batches) {
+	numProcessors := runtime.NumCPU()
+	log.Infof("Spinning up %d batch processors.\n", numProcessors)
+	period := Period{Start: start, End: end}
+	splits := period.SplitsFrom(numProcessors)
+	processors := make([]<-chan *storage.TableBatch, numProcessors)
+	for i := 0; i < len(splits); i++ {
+		split := splits[i]
+		processor := process(d.batches(done, d.partitions(done, d.queryResultsGenerator(done, d.periodQueryOptionsGenerator(done, split.Start, split.End, d.periodLengthInDays), timeout))))
+		processors[i] = processor
+	}
+
+	for processedBatch := range FanIn(done, processors...) {
 		d.result.BatchCount++
 		d.result.RowCount += int64(len(processedBatch.BatchEntitySlice))
 	}
@@ -146,10 +157,12 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 	go func() {
 		defer close(queryResultStream)
 		for queryOptions := range queryOptionsStream {
-			log.Info("Query options: ", queryOptions)
+			log.Info("Querying entities using: ", queryOptions)
 			pageCount := 1
+			entityCount := 0
 			log.Debugf("Fetching page %d", pageCount)
 			result, err := d.table.QueryEntities(timeout, storage.NoMetadata, queryOptions)
+			entityCount += len(result.Entities)
 			queryResult := QueryResult{Error: err, EntityQueryResult: result}
 			select {
 			case <-done:
@@ -161,6 +174,7 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 				pageCount++
 				log.Debugf("Fetching next page %d", pageCount)
 				result, err = result.NextResults(tableOptions)
+				entityCount += len(result.Entities)
 				queryResult := QueryResult{Error: err, EntityQueryResult: result}
 				select {
 				case <-done:
@@ -168,7 +182,9 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 				case queryResultStream <- queryResult:
 				}
 			}
+			log.Infof("Processed %d pages. %d entities", pageCount, entityCount)
 		}
+
 	}()
 	return queryResultStream
 }
@@ -182,7 +198,7 @@ func (d *DefaultTablePurger) partitions(done <-chan interface{}, queryResults <-
 			for _, entity := range result.EntityQueryResult.Entities {
 				m[entity.PartitionKey] = append(m[entity.PartitionKey], entity)
 			}
-			log.Debugf("Partioning result: %d", len(m))
+			log.Debugf("Partioning query result: %d", len(m))
 			for k, v := range m {
 				partition := Partition{key: k, entities: v}
 				select {
@@ -204,7 +220,7 @@ func (d *DefaultTablePurger) batches(done <-chan interface{}, partitions <-chan 
 		for p := range partitions {
 			entities := p.entities
 			count := len(entities)
-			log.Debugf("Chunkfying partition (%s) with %d entitie(s)", p.key, count)
+			log.Debugf("Chunkfying partition (%s) with %d entities", p.key, count)
 			for i := 0; i < count; i += chunkSize {
 				end := i + chunkSize
 				if end > count {
@@ -261,7 +277,7 @@ func (d *DefaultTablePurger) periodQueryOptionsGenerator(done <-chan interface{}
 				to = time.Date(to.Year(), to.Month(), to.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
 			}
 
-			log.Infof("Generating query: from %s to %s", from, to)
+			log.Infof("Creating queryOptions: from %s to %s", from, to)
 			fromTicks := TicksAscendingWithLeadingZero(TicksFromTime(from))
 			toTicks := TicksAscendingWithLeadingZero(TicksFromTime(to))
 			queryOptions := &storage.QueryOptions{}
