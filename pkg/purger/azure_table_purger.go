@@ -3,7 +3,6 @@ package purger
 import (
 	"errors"
 	"fmt"
-	"runtime"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -41,17 +40,19 @@ type DefaultTablePurger struct {
 	tableName                  string
 	purgeEntitiesOlderThanDays int
 	periodLengthInDays         int
+	numWorkers                 int
 	table                      *storage.Table
 	dryRun                     bool
 	result                     PurgeResult
 }
 
 // NewTablePurgerWithClient creates a new Basic Purger
-func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, tableName string, purgeEntitiesOlderThanDays, periodLengthInDays int, dryRun bool) (AzureTablePurger, error) {
+func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, tableName string, purgeEntitiesOlderThanDays, periodLengthInDays, numWorkers int, dryRun bool) (AzureTablePurger, error) {
 	purger := &DefaultTablePurger{
 		tableName:                  tableName,
 		purgeEntitiesOlderThanDays: purgeEntitiesOlderThanDays,
 		periodLengthInDays:         periodLengthInDays,
+		numWorkers:                 numWorkers,
 		dryRun:                     dryRun,
 	}
 	tableService := client.GetTableService()
@@ -61,12 +62,12 @@ func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, ta
 }
 
 // NewTablePurger creates a new Basic Purger
-func NewTablePurger(accountName, accountKey, tableName string, purgeEntitiesOlderThanDays, periodLengthInDays int, dryRun bool) (AzureTablePurger, error) {
+func NewTablePurger(accountName, accountKey, tableName string, purgeEntitiesOlderThanDays, periodLengthInDays, numWorkers int, dryRun bool) (AzureTablePurger, error) {
 	client, err := storage.NewBasicClient(accountName, accountKey)
 	if err != nil {
 		return nil, err
 	}
-	return NewTablePurgerWithClient(client, accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInDays, dryRun)
+	return NewTablePurgerWithClient(client, accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInDays, numWorkers, dryRun)
 }
 
 // QueryResult groups 2 query possible outcomes
@@ -132,10 +133,11 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		return processedBatchStream
 	}
 
-	numProcessors := runtime.NumCPU() * 2
+	numProcessors := d.numWorkers
 	log.Infof("Spinning up %d batch processors.\n", numProcessors)
 	period := Period{Start: start, End: end}
 	splits := period.SplitsFrom(numProcessors)
+	logPeriods(splits)
 	processors := make([]<-chan *storage.TableBatch, numProcessors)
 	for i := 0; i < len(splits); i++ {
 		split := splits[i]
@@ -324,4 +326,10 @@ func (d *DefaultTablePurger) periodQueryOptionsGenerator2(done <-chan interface{
 		}
 	}()
 	return queryOptionsStream
+}
+
+func logSplits(splits []Period) {
+	for index, period := range splits {
+		log.Infof("Split #%d: %s -> %s", index, period.Start.Format(time.RFC3339), period.End.Format(time.RFC3339))
+	}
 }

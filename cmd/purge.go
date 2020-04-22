@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"runtime"
+
 	"github.com/fabito/azure-storage-purger/pkg/purger"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var (
+	numWorkers                 int
 	purgeEntitiesOlderThanDays int
 	periodLengthInDays         int
 	dryRun                     bool
@@ -20,7 +23,7 @@ var purgeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		log.Info("Starting purge")
 
-		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInDays, dryRun)
+		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInDays, numWorkers, dryRun)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -39,10 +42,7 @@ var purgeCmd = &cobra.Command{
 func init() {
 	tableCmd.AddCommand(purgeCmd)
 	purgeCmd.Flags().IntVar(&purgeEntitiesOlderThanDays, "num-days-to-keep", 365, "Number of days to keep")
-	purgeCmd.MarkFlagRequired("num-days-to-keep")
-
 	purgeCmd.Flags().IntVar(&periodLengthInDays, "num-days-per-worker", 90, "Number of days per worker")
-	purgeCmd.MarkFlagRequired("num-days-per-worker")
-
+	purgeCmd.Flags().IntVar(&numWorkers, "num-workers", runtime.NumCPU()*2, "Number of workers. Default is cpus * 2")
 	purgeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Enable dry run mode")
 }

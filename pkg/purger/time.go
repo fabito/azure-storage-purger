@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const ticksAtEpock int64 = 621355968000000000
@@ -14,6 +16,11 @@ const ticksPerMillisecond int64 = 10000
 type Period struct {
 	Start time.Time
 	End   time.Time
+}
+
+// Duration the Periods's time.Duration
+func (p *Period) Duration() time.Duration {
+	return p.End.Sub(p.Start)
 }
 
 // SplitsFrom dsfg
@@ -83,4 +90,10 @@ func TicksFromTime2(t time.Time) int64 {
 func TicksFromTime(t time.Time) int64 {
 	millis := t.UTC().UnixNano() / 1000000
 	return (millis * ticksPerMillisecond) + ticksAtEpock
+}
+
+func logPeriods(splits []Period) {
+	for index, period := range splits {
+		log.Infof("#%d: %s -> %s (%s)", index, period.Start.Format(time.RFC3339), period.End.Format(time.RFC3339), period.Duration())
+	}
 }
