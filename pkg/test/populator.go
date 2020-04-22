@@ -51,7 +51,7 @@ func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates
 				key:      partitionKey,
 				entities: make([]*storage.Entity, entitiesPerPartitionCount),
 			}
-			log.Debugf("Adding %d to %s (%s)", entitiesPerPartitionCount, partitionKey)
+			log.Debugf("Adding %d to %s ()", entitiesPerPartitionCount, partitionKey)
 			for i := 0; i < entitiesPerPartitionCount; i++ {
 				e := table.GetEntityReference(partitionKey, strconv.Itoa(i+1))
 				props := map[string]interface{}{

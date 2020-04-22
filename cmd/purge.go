@@ -8,6 +8,7 @@ import (
 
 var (
 	purgeEntitiesOlderThanDays int
+	periodLengthInDays         int
 	dryRun                     bool
 )
 
@@ -19,7 +20,7 @@ var purgeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		log.Info("Starting purge")
 
-		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, dryRun)
+		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInDays, dryRun)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -28,13 +29,20 @@ var purgeCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Infof("%#v", result)
+		log.Debugf("%#v", result)
+		log.Infof("Finished purge job in %s", result.EndTime.Sub(result.StartTime))
+		log.Infof("Deleted %d entitie(s) in %d batch(es)", result.RowCount, result.BatchCount)
+		log.Infof("Requested %d page(s)", result.PageCount)
 	},
 }
 
 func init() {
 	tableCmd.AddCommand(purgeCmd)
-	purgeCmd.Flags().IntVar(&purgeEntitiesOlderThanDays, "num-days", 365, "Number of days to keep")
-	purgeCmd.MarkFlagRequired("num-days")
+	purgeCmd.Flags().IntVar(&purgeEntitiesOlderThanDays, "num-days-to-keep", 365, "Number of days to keep")
+	purgeCmd.MarkFlagRequired("num-days-to-keep")
+
+	purgeCmd.Flags().IntVar(&periodLengthInDays, "num-days-per-worker", 1, "Number of days per worker")
+	purgeCmd.MarkFlagRequired("num-days-per-worker")
+
 	purgeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Enable dry run mode")
 }

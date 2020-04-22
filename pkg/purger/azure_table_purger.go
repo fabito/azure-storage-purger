@@ -3,7 +3,6 @@ package purger
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -38,34 +37,36 @@ type AzureTablePurger interface {
 
 // DefaultTablePurger default table purger
 type DefaultTablePurger struct {
-	storageAccountName         string
-	storageAccountKey          string
 	tableName                  string
 	purgeEntitiesOlderThanDays int
+	periodLengthInDays         int
 	table                      *storage.Table
 	dryRun                     bool
+	result                     PurgeResult
 }
 
-// NewTablePurger creates a new Basic Purger
-func NewTablePurger(accountName, accountKey, tableName string, purgeEntitiesOlderThanDays int, dryRun bool) (*DefaultTablePurger, error) {
+// NewTablePurgerWithClient creates a new Basic Purger
+func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, tableName string, purgeEntitiesOlderThanDays, periodLengthInDays int, dryRun bool) (AzureTablePurger, error) {
 	purger := &DefaultTablePurger{
-		storageAccountName:         accountName,
-		storageAccountKey:          accountKey,
 		tableName:                  tableName,
 		purgeEntitiesOlderThanDays: purgeEntitiesOlderThanDays,
+		periodLengthInDays:         periodLengthInDays,
 		dryRun:                     dryRun,
+		result:                     PurgeResult{StartTime: time.Now().UTC()},
 	}
-	client, err := storage.NewBasicClient(purger.storageAccountName, purger.storageAccountKey)
-
-	if err != nil {
-		return nil, err
-	}
-
 	tableService := client.GetTableService()
 	table := tableService.GetTableReference(purger.tableName)
 	purger.table = table
-
 	return purger, nil
+}
+
+// NewTablePurger creates a new Basic Purger
+func NewTablePurger(accountName, accountKey, tableName string, purgeEntitiesOlderThanDays, periodLengthInDays int, dryRun bool) (AzureTablePurger, error) {
+	client, err := storage.NewBasicClient(accountName, accountKey)
+	if err != nil {
+		return nil, err
+	}
+	return NewTablePurgerWithClient(client, accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInDays, dryRun)
 }
 
 // QueryResult groups 2 query possible outcomes
@@ -88,15 +89,13 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 
 	done := make(chan interface{})
 	defer close(done)
-	var wg sync.WaitGroup
 	var timeout uint = 120
-	purgeResult := PurgeResult{StartTime: time.Now().UTC()}
 
 	startPartitionKey, err := d.getOldestPartition(timeout)
 
 	if err != nil {
-		purgeResult.end()
-		return purgeResult, err
+		d.result.end()
+		return d.result, err
 	}
 
 	endPartitionKey := GetMaximumPartitionKeyToDelete(d.purgeEntitiesOlderThanDays)
@@ -105,57 +104,42 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 
 	if start.After(end) {
 		log.Warnf("Start date (%s) is greater than end date (%s)", start, end)
-		purgeResult.end()
-		return purgeResult, err
+		d.result.end()
+		return d.result, err
 	}
 
-	log.Debugf("Starting purging all entities created between %s and %s", start, end)
+	log.Infof("Starting purging all entities created between %s and %s", start, end)
 
-	for batch := range d.batches(done, d.partitions2(done, d.queryResultsGenerator(done, d.dailyQueryOptionsGenerator(done, start, end), timeout))) {
-		wg.Add(1)
-		go func(batch *storage.TableBatch) {
-			log.Debugf("Executing batch with size %d", len(batch.BatchEntitySlice))
-			if !d.dryRun {
-				err := batch.ExecuteBatch()
-				if err != nil {
-					log.Errorf("Error executing batch: %#v", err)
+	process := func(batches <-chan *storage.TableBatch) <-chan *storage.TableBatch {
+		processedBatchStream := make(chan *storage.TableBatch)
+		go func() {
+			defer close(processedBatchStream)
+			for batch := range batches {
+				log.Debugf("Executing batch with size %d", len(batch.BatchEntitySlice))
+				if !d.dryRun {
+					err := batch.ExecuteBatch()
+					if err != nil {
+						log.Errorf("Error executing batch: %#v", err)
+					}
+				}
+				select {
+				case <-done:
+					return
+				case processedBatchStream <- batch:
 				}
 			}
-			wg.Done()
-		}(batch)
-	}
-	wg.Wait()
-	purgeResult.end()
-	return purgeResult, nil
-}
-
-// PurgeEntities2 sdf
-func (d *DefaultTablePurger) PurgeEntities2() (PurgeResult, error) {
-	if d.dryRun {
-		log.Info("Dry run is enabled")
+		}()
+		return processedBatchStream
 	}
 
-	done := make(chan interface{})
-	defer close(done)
-	var wg sync.WaitGroup
-	purgeResult := PurgeResult{StartTime: time.Now().UTC()}
-
-	for batch := range d.batches(done, d.partitions2(done, d.queryResults(done, 120))) {
-		wg.Add(1)
-		go func(batch *storage.TableBatch) {
-			log.Debugf("Executing batch with size %d", len(batch.BatchEntitySlice))
-			if !d.dryRun {
-				err := batch.ExecuteBatch()
-				if err != nil {
-					log.Errorf("Error executing batch: %#v", err)
-				}
-			}
-			wg.Done()
-		}(batch)
+	batches := d.batches(done, d.partitions(done, d.queryResultsGenerator(done, d.periodQueryOptionsGenerator(done, start, end, d.periodLengthInDays), timeout)))
+	for processedBatch := range process(batches) {
+		d.result.BatchCount++
+		d.result.RowCount += int64(len(processedBatch.BatchEntitySlice))
 	}
-	wg.Wait()
-	purgeResult.EndTime = time.Now().UTC()
-	return purgeResult, nil
+
+	d.result.end()
+	return d.result, nil
 }
 
 func (d *DefaultTablePurger) queryResults(done <-chan interface{}, timeout uint) <-chan QueryResult {
@@ -224,7 +208,7 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 	return queryResultStream
 }
 
-func (d *DefaultTablePurger) partitions2(done <-chan interface{}, queryResults <-chan QueryResult) <-chan Partition {
+func (d *DefaultTablePurger) partitions(done <-chan interface{}, queryResults <-chan QueryResult) <-chan Partition {
 	yield := make(chan Partition)
 	go func() {
 		defer close(yield)
@@ -299,14 +283,20 @@ func (d *DefaultTablePurger) getOldestPartition(timeout uint) (string, error) {
 	return "", errors.New("Oldest record not found")
 }
 
-func (d *DefaultTablePurger) dailyQueryOptionsGenerator(done <-chan interface{}, start, end time.Time) <-chan *storage.QueryOptions {
+func (d *DefaultTablePurger) periodQueryOptionsGenerator(done <-chan interface{}, start, end time.Time, periodLengthInDays int) <-chan *storage.QueryOptions {
 	queryOptionsStream := make(chan *storage.QueryOptions)
 	go func() {
 		defer close(queryOptionsStream)
-		for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
+		for d := start; d.After(end) == false; d = d.AddDate(0, 0, periodLengthInDays) {
 			from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
-			to := time.Date(d.Year(), d.Month(), d.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
-			log.Debugf("Generating queries from %s to %s", from, to)
+			to := from.AddDate(0, 0, periodLengthInDays-1)
+			if to.After(end) {
+				to = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
+			} else {
+				to = time.Date(to.Year(), to.Month(), to.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
+			}
+
+			log.Infof("Generating queries from %s to %s", from, to)
 			fromTicks := TicksAscendingWithLeadingZero(TicksFromTime(from))
 			toTicks := TicksAscendingWithLeadingZero(TicksFromTime(to))
 			queryOptions := &storage.QueryOptions{}
