@@ -1,4 +1,6 @@
-# `azp` CLI utility to purge data from Azure Storage Tables
+# `azp` 
+
+Command line utility for purging data from Azure Storage Tables
 
 ``` bash
 $ bin/azp table --help
