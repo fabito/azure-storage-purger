@@ -79,3 +79,43 @@ func TestSplitPeriodsOdd(t *testing.T) {
 
 	fmt.Print(splits)
 }
+
+func TestSplitPeriodsSpecific(t *testing.T) {
+	// 2018-07-11 00:00:00 +0000 UTC
+	// 2018-08-11 13:17:09.00962 +0000 UTC
+
+	start := time.Date(2018, 7, 11, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2018, 8, 11, 13, 17, 9, 9620000, time.UTC)
+
+	p := Period{Start: start, End: end}
+	splits := p.SplitsFrom(16)
+
+	assert.Equal(t, 16, len(splits))
+	assert.Equal(t, start, splits[0].Start)
+	assert.True(t, splits[0].End.After(splits[0].Start))
+	assert.True(t, splits[0].End.Before(splits[1].Start))
+	assert.True(t, splits[1].End.After(splits[1].Start))
+	assert.Equal(t, end, splits[15].End)
+
+	fmt.Print(splits)
+}
+
+func TestSplitPeriodsOneDay(t *testing.T) {
+	// 2018-07-11 00:00:00 +0000 UTC
+	// 2018-07-12 20:58:32.00879 +0000 UTC
+
+	start := time.Date(2018, 7, 11, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2018, 7, 12, 20, 58, 32, 8790000, time.UTC)
+
+	p := Period{Start: start, End: end}
+	splits := p.SplitsFrom(16)
+
+	assert.Equal(t, 16, len(splits))
+	assert.Equal(t, start, splits[0].Start)
+	assert.True(t, splits[0].End.After(splits[0].Start))
+	assert.True(t, splits[0].End.Before(splits[1].Start))
+	assert.True(t, splits[1].End.After(splits[1].Start))
+	assert.Equal(t, end, splits[15].End)
+
+	fmt.Print(splits)
+}

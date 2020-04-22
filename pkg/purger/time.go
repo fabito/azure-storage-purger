@@ -21,25 +21,23 @@ func (p *Period) SplitsFrom(numSplits int) []Period {
 	splits := make([]Period, numSplits)
 	duration := p.End.Sub(p.Start).Milliseconds()
 	segmentLength := duration / int64(numSplits)
+	step := time.Duration(segmentLength) * time.Millisecond
 	s := p.Start
 	for i := 1; i <= numSplits; i++ {
-		step := time.Duration(segmentLength) * time.Millisecond
 		var e time.Time
 		if i == numSplits {
 			e = p.End
 		} else {
 			e = s.Add(step)
 		}
-		if s.Before(e) {
-			splits[i-1] = Period{Start: s, End: e}
-			s = e.AddDate(0, 0, 1)
-		}
+		splits[i-1] = Period{Start: s, End: e}
+		s = e.Add(1 * time.Millisecond)
 	}
 	return splits
 }
 
 func (p Period) String() string {
-	return fmt.Sprintf("%#v", p)
+	return fmt.Sprintf("From %s to %s", p.Start, p.End)
 }
 
 func rightPad2Len(s string, padStr string, overallLen int) string {

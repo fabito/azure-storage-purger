@@ -21,7 +21,7 @@ var populateCmd = &cobra.Command{
 		end := time.Now().UTC()
 
 		if start.After(end) {
-			log.Fatalf("Start year %s cannot be in the future")
+			log.Fatalf("Start %s cannot be in the future", start)
 		}
 
 		err := test.PopulateTable(accountName, accountKey, tableName, start, end, maxNumberOfEntitiesPerPartition)

@@ -132,14 +132,14 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		return processedBatchStream
 	}
 
-	numProcessors := runtime.NumCPU()
+	numProcessors := runtime.NumCPU() * 2
 	log.Infof("Spinning up %d batch processors.\n", numProcessors)
 	period := Period{Start: start, End: end}
 	splits := period.SplitsFrom(numProcessors)
 	processors := make([]<-chan *storage.TableBatch, numProcessors)
 	for i := 0; i < len(splits); i++ {
 		split := splits[i]
-		processor := process(d.batches(done, d.partitions(done, d.queryResultsGenerator(done, d.periodQueryOptionsGenerator(done, split.Start, split.End, d.periodLengthInDays), timeout))))
+		processor := process(d.batches(done, d.partitions(done, d.queryResultsGenerator(done, d.periodQueryOptionsGenerator2(done, split.Start, split.End, d.periodLengthInDays), timeout))))
 		processors[i] = processor
 	}
 
@@ -159,10 +159,8 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 		for queryOptions := range queryOptionsStream {
 			log.Info("Querying entities using: ", queryOptions)
 			pageCount := 1
-			entityCount := 0
 			log.Debugf("Fetching page %d", pageCount)
 			result, err := d.table.QueryEntities(timeout, storage.NoMetadata, queryOptions)
-			entityCount += len(result.Entities)
 			queryResult := QueryResult{Error: err, EntityQueryResult: result}
 			select {
 			case <-done:
@@ -170,11 +168,17 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 			case queryResultStream <- queryResult:
 			}
 			tableOptions := &storage.TableOptions{}
-			for result.QueryNextLink.NextLink != nil {
+			for result != nil && result.QueryNextLink.NextLink != nil {
 				pageCount++
 				log.Debugf("Fetching next page %d", pageCount)
 				result, err = result.NextResults(tableOptions)
-				entityCount += len(result.Entities)
+				if err != nil {
+					log.Warnf("Error fetching page %d", pageCount)
+					log.Error(err)
+				}
+				if pageCount%100 == 0 {
+					log.Infof("Processed %d pages.", pageCount)
+				}
 				queryResult := QueryResult{Error: err, EntityQueryResult: result}
 				select {
 				case <-done:
@@ -182,7 +186,7 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 				case queryResultStream <- queryResult:
 				}
 			}
-			log.Infof("Processed %d pages / %d entities. QueryOptions %#v", pageCount, entityCount, queryOptions)
+			log.Infof("Processed %d pages. QueryOptions %#v", pageCount, queryOptions)
 		}
 
 	}()
@@ -194,7 +198,15 @@ func (d *DefaultTablePurger) partitions(done <-chan interface{}, queryResults <-
 	go func() {
 		defer close(yield)
 		for result := range queryResults {
+
+			if result.Error != nil {
+				// TODO Compute metric errors
+				log.Warn("Skipping query result in failed state.")
+				continue
+			}
+
 			m := make(map[string][]*storage.Entity)
+
 			for _, entity := range result.EntityQueryResult.Entities {
 				m[entity.PartitionKey] = append(m[entity.PartitionKey], entity)
 			}
@@ -288,6 +300,27 @@ func (d *DefaultTablePurger) periodQueryOptionsGenerator(done <-chan interface{}
 				return
 			case queryOptionsStream <- queryOptions:
 			}
+		}
+	}()
+	return queryOptionsStream
+}
+
+func (d *DefaultTablePurger) periodQueryOptionsGenerator2(done <-chan interface{}, start, end time.Time, periodLengthInDays int) <-chan *storage.QueryOptions {
+	queryOptionsStream := make(chan *storage.QueryOptions)
+	go func() {
+		defer close(queryOptionsStream)
+		from := start
+		to := end
+		log.Infof("Creating queryOptions: from %s to %s", from, to)
+		fromTicks := TicksAscendingWithLeadingZero(TicksFromTime(from))
+		toTicks := TicksAscendingWithLeadingZero(TicksFromTime(to))
+		queryOptions := &storage.QueryOptions{}
+		queryOptions.Filter = fmt.Sprintf("PartitionKey ge '%s' and PartitionKey lt '%s'", fromTicks, toTicks)
+		queryOptions.Select = []string{"PartitionKey", "RowKey"}
+		select {
+		case <-done:
+			return
+		case queryOptionsStream <- queryOptions:
 		}
 	}()
 	return queryOptionsStream
