@@ -182,7 +182,7 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 				case queryResultStream <- queryResult:
 				}
 			}
-			log.Infof("Processed %d pages. %d entities", pageCount, entityCount)
+			log.Infof("Processed %d pages / %d entities. QueryOptions %#v", pageCount, entityCount, queryOptions)
 		}
 
 	}()
