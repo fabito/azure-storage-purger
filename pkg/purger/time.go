@@ -25,8 +25,11 @@ func (p *Period) Duration() time.Duration {
 
 // SplitsFrom dsfg
 func (p *Period) SplitsFrom(numSplits int) []Period {
-	splits := make([]Period, numSplits)
 	duration := p.End.Sub(p.Start).Milliseconds()
+	if duration == 0 {
+		return make([]Period, 0)
+	}
+	splits := make([]Period, numSplits)
 	segmentLength := duration / int64(numSplits)
 	step := time.Duration(segmentLength) * time.Millisecond
 	s := p.Start

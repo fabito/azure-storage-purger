@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/fabito/azure-storage-purger/pkg/purger"
@@ -37,6 +38,10 @@ var purgeCmd = &cobra.Command{
 		log.Infof("To delete %d entities in %d batches", result.RowCount, result.BatchCount)
 		log.Infof("Errors in %d batches (%d entities)", result.BatchErrorCount, result.RowErrorCount)
 		log.Debugf("Total requested %d page(s)", result.PageCount)
+
+		if result.HasErrors() {
+			os.Exit(1)
+		}
 	},
 }
 

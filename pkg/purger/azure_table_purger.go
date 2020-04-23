@@ -129,8 +129,8 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 	start := timeFromTicksAscendingWithLeadingZero(startPartitionKey)
 	end := timeFromTicksAscendingWithLeadingZero(endPartitionKey)
 
-	if start.After(end) {
-		log.Warnf("Start date (%s) is greater than end date (%s)", start, end)
+	if start == end || start.After(end) {
+		log.Warnf("Start date (%s) should be greater than end date (%s)", start, end)
 		d.result.end()
 		return d.result, err
 	}
@@ -166,7 +166,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 	period := Period{Start: start, End: end}
 	splits := period.SplitsFrom(numProcessors)
 	logPeriods(splits)
-	processors := make([]<-chan *TableBatchResult, numProcessors)
+	processors := make([]<-chan *TableBatchResult, len(splits))
 	for i := 0; i < len(splits); i++ {
 		split := splits[i]
 		processor := process(d.batches(done, d.partitions(done, d.queryResultsGenerator(done, d.periodQueryOptionsGenerator2(done, split.Start, split.End, d.periodLengthInDays), timeout))))
@@ -298,7 +298,7 @@ func (d *DefaultTablePurger) getOldestPartition(timeout uint) (string, error) {
 	if len(result.Entities) > 0 {
 		oldestEntity := result.Entities[0]
 		oldestPartitionKey := oldestEntity.PartitionKey
-		log.Infof("Oldest partition key is %s (%s)", oldestPartitionKey, timeFromTicksAscendingWithLeadingZero(oldestPartitionKey))
+		log.Infof("Oldest partition key in '%s' table is %s (%s)", d.tableName, oldestPartitionKey, timeFromTicksAscendingWithLeadingZero(oldestPartitionKey))
 		return oldestPartitionKey, nil
 	}
 
