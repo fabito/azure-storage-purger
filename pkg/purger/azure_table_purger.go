@@ -12,14 +12,16 @@ import (
 
 // PurgeResult details and metrics about the purge operation
 type PurgeResult struct {
-	PageCount      int64     `json:"page_count"`
-	PartitionCount int64     `json:"partition_count"`
-	RowCount       int64     `json:"row_count"`
-	BatchCount     int64     `json:"batch_count"`
-	StartTime      time.Time `json:"start_time"`
-	EndTime        time.Time `json:"end_time"`
-	MinDate        time.Time `json:"min_date"`
-	MaxDate        time.Time `json:"max_date"`
+	PageCount       int64     `json:"page_count"`
+	PartitionCount  int64     `json:"partition_count"`
+	RowCount        int64     `json:"row_count"`
+	BatchCount      int64     `json:"batch_count"`
+	BatchErrorCount int64     `json:"batch_error_count"`
+	RowErrorCount   int64     `json:"row_error_count"`
+	StartTime       time.Time `json:"start_time"`
+	EndTime         time.Time `json:"end_time"`
+	// MinDate         time.Time `json:"min_date"`
+	// MaxDate         time.Time `json:"max_date"`
 }
 
 func (p *PurgeResult) addPageCount() {
@@ -28,6 +30,20 @@ func (p *PurgeResult) addPageCount() {
 
 func (p *PurgeResult) end() {
 	p.EndTime = time.Now().UTC()
+}
+
+func (p *PurgeResult) computeTableBatchResult(result *TableBatchResult) {
+	p.BatchCount++
+	p.RowCount += result.batchSize()
+	if result.Error != nil {
+		p.BatchErrorCount++
+		p.RowErrorCount += result.batchSize()
+	}
+}
+
+// HasErrors whether or not any error occurred during the purge job
+func (p *PurgeResult) HasErrors() bool {
+	return p.BatchErrorCount > 0
 }
 
 // AzureTablePurger purges entities from Storage Tables
@@ -76,6 +92,16 @@ type QueryResult struct {
 	EntityQueryResult *storage.EntityQueryResult
 }
 
+// TableBatchResult holds the result of a batch operation
+type TableBatchResult struct {
+	Error error
+	Batch *storage.TableBatch
+}
+
+func (t *TableBatchResult) batchSize() int64 {
+	return int64(len(t.Batch.BatchEntitySlice))
+}
+
 // Partition contains the entities grouped by partition
 type Partition struct {
 	key      string
@@ -111,22 +137,24 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 
 	log.Infof("Starting purging all entities created between %s and %s", start, end)
 
-	process := func(batches <-chan *storage.TableBatch) <-chan *storage.TableBatch {
-		processedBatchStream := make(chan *storage.TableBatch)
+	process := func(batches <-chan *storage.TableBatch) <-chan *TableBatchResult {
+		processedBatchStream := make(chan *TableBatchResult)
 		go func() {
 			defer close(processedBatchStream)
 			for batch := range batches {
 				log.Debugf("Executing table batch with size %d", len(batch.BatchEntitySlice))
+				result := &TableBatchResult{Batch: batch}
 				if !d.dryRun {
 					err := batch.ExecuteBatch()
+					result.Error = err
 					if err != nil {
-						log.Errorf("Error executing batch: %#v", err)
+						log.Error(err)
 					}
 				}
 				select {
 				case <-done:
 					return
-				case processedBatchStream <- batch:
+				case processedBatchStream <- result:
 				}
 			}
 		}()
@@ -138,7 +166,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 	period := Period{Start: start, End: end}
 	splits := period.SplitsFrom(numProcessors)
 	logPeriods(splits)
-	processors := make([]<-chan *storage.TableBatch, numProcessors)
+	processors := make([]<-chan *TableBatchResult, numProcessors)
 	for i := 0; i < len(splits); i++ {
 		split := splits[i]
 		processor := process(d.batches(done, d.partitions(done, d.queryResultsGenerator(done, d.periodQueryOptionsGenerator2(done, split.Start, split.End, d.periodLengthInDays), timeout))))
@@ -146,8 +174,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 	}
 
 	for processedBatch := range FanIn(done, processors...) {
-		d.result.BatchCount++
-		d.result.RowCount += int64(len(processedBatch.BatchEntitySlice))
+		d.result.computeTableBatchResult(processedBatch)
 	}
 
 	d.result.end()
@@ -159,7 +186,7 @@ func (d *DefaultTablePurger) queryResultsGenerator(done <-chan interface{}, quer
 	go func() {
 		defer close(queryResultStream)
 		for queryOptions := range queryOptionsStream {
-			log.Info("Querying entities using: ", queryOptions)
+			log.Debug("Querying entities using: ", queryOptions)
 			pageCount := 1
 			log.Debugf("Fetching page %d", pageCount)
 			result, err := d.table.QueryEntities(timeout, storage.NoMetadata, queryOptions)
@@ -234,7 +261,7 @@ func (d *DefaultTablePurger) batches(done <-chan interface{}, partitions <-chan 
 		for p := range partitions {
 			entities := p.entities
 			count := len(entities)
-			log.Debugf("Chunkfying partition (%s) with %d entities", p.key, count)
+			log.Tracef("Chunkfying partition (%s) with %d entities", p.key, count)
 			for i := 0; i < count; i += chunkSize {
 				end := i + chunkSize
 				if end > count {
@@ -271,7 +298,7 @@ func (d *DefaultTablePurger) getOldestPartition(timeout uint) (string, error) {
 	if len(result.Entities) > 0 {
 		oldestEntity := result.Entities[0]
 		oldestPartitionKey := oldestEntity.PartitionKey
-		log.Debugf("Oldest partition key is %s (%s)", oldestPartitionKey, timeFromTicksAscendingWithLeadingZero(oldestPartitionKey))
+		log.Infof("Oldest partition key is %s (%s)", oldestPartitionKey, timeFromTicksAscendingWithLeadingZero(oldestPartitionKey))
 		return oldestPartitionKey, nil
 	}
 

@@ -35,6 +35,7 @@ var purgeCmd = &cobra.Command{
 		log.Debugf("%#v", result)
 		log.Infof("It took %s", result.EndTime.Sub(result.StartTime))
 		log.Infof("To delete %d entities in %d batches", result.RowCount, result.BatchCount)
+		log.Infof("Errors in %d batches (%d entities)", result.BatchErrorCount, result.RowErrorCount)
 		log.Debugf("Total requested %d page(s)", result.PageCount)
 	},
 }

@@ -64,6 +64,7 @@ func rightPad2Len(s string, padStr string, overallLen int) string {
 func GetMaximumPartitionKeyToDelete(purgeRecordsOlderThanDays int) string {
 	today := time.Now().UTC()
 	then := today.AddDate(0, 0, -1*purgeRecordsOlderThanDays)
+	then = time.Date(then.Year(), then.Month(), then.Day(), 0, 0, 0, 0, time.UTC)
 	ticks := TicksFromTime(then)
 	return TicksAscendingWithLeadingZero(ticks)
 }

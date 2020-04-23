@@ -2,11 +2,9 @@ package purger
 
 import (
 	"sync"
-
-	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
-// RepeatFn
+// RepeatFn repeat with function
 func RepeatFn(done <-chan interface{}, fn func() interface{}) <-chan interface{} {
 	valueStream := make(chan interface{})
 	go func() {
@@ -39,11 +37,11 @@ func Take(done <-chan interface{}, valueStream <-chan interface{}, num int) <-ch
 }
 
 // FanIn FanIn
-func FanIn(done <-chan interface{}, channels ...<-chan *storage.TableBatch) chan *storage.TableBatch {
+func FanIn(done <-chan interface{}, channels ...<-chan *TableBatchResult) chan *TableBatchResult {
 	var wg sync.WaitGroup
-	multiplexedStream := make(chan *storage.TableBatch)
+	multiplexedStream := make(chan *TableBatchResult)
 
-	multiplex := func(c <-chan *storage.TableBatch) {
+	multiplex := func(c <-chan *TableBatchResult) {
 		defer wg.Done()
 		for i := range c {
 			select {
@@ -69,6 +67,24 @@ func FanIn(done <-chan interface{}, channels ...<-chan *storage.TableBatch) chan
 	return multiplexedStream
 }
 
+// Repeat repeat
+func Repeat(done <-chan interface{}, values ...interface{}) <-chan interface{} {
+	valueStream := make(chan interface{})
+	go func() {
+		defer close(valueStream)
+		for {
+			for _, v := range values {
+				select {
+				case <-done:
+					return
+				case valueStream <- v:
+				}
+			}
+		}
+	}()
+	return valueStream
+}
+
 func toString(done <-chan interface{}, valueStream <-chan interface{}) <-chan string {
 	stringStream := make(chan string)
 	go func() {
@@ -87,24 +103,3 @@ func toString(done <-chan interface{}, valueStream <-chan interface{}) <-chan st
 // func t() {
 // 	done := make(chan interface{})
 // 	defer close(done)
-
-// 	start := time.Now()
-
-// 	rand := func() interface{} { return rand.Intn(50000000) }
-
-// 	randIntStream := toInt(done, RepeatFn(done, rand))
-
-// 	numFinders := runtime.NumCPU()
-// 	fmt.Printf("Spinning up %d prime finders.\n", numFinders)
-// 	finders := make([]<-chan interface{}, numFinders)
-// 	fmt.Println("Primes:")
-// 	for i := 0; i < numFinders; i++ {
-// 		finders[i] = primeFinder(done, randIntStream)
-// 	}
-
-// 	for prime := range Take(done, FanIn(done, finders...), 10) {
-// 		fmt.Printf("\t%d\n", prime)
-// 	}
-
-// 	fmt.Printf("Search took: %v", time.Since(start))
-// }
