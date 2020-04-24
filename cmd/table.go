@@ -19,6 +19,10 @@ var tableCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(tableCmd)
+
+	// os.Getenv("AZP_STORAGE_ACCOUNT_NAME")
+	// os.Getenv("AZP_STORAGE_ACCOUNT_KEY")
+
 	tableCmd.PersistentFlags().StringVar(&accountName, "account-name", "", "The storage account name")
 	tableCmd.MarkPersistentFlagRequired("account-name")
 

@@ -36,7 +36,7 @@ azp table purge \
     --account-name $STORAGE_ACCOUNT_NAME  \
     --account-key $STORAGE_ACCOUNT_KEY \
     --table-name "logs" \
-    --num-days-per-worker 240 \
+    --num-workers 64 \
     --num-days-to-keep 30  \
     -v info
 ```

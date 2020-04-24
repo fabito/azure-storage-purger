@@ -3,8 +3,8 @@ module github.com/fabito/azure-storage-purger
 go 1.14
 
 require (
-	github.com/Azure/azure-sdk-for-go v41.2.0+incompatible
-	github.com/Azure/go-autorest/autorest v0.10.0 // indirect
+	github.com/Azure/azure-sdk-for-go v41.3.0+incompatible
+	github.com/Azure/go-autorest/autorest v0.10.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.2.0

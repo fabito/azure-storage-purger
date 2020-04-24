@@ -71,6 +71,9 @@ func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, ta
 		numWorkers:                 numWorkers,
 		dryRun:                     dryRun,
 	}
+	if log.IsLevelEnabled(log.TraceLevel) {
+		client.Sender = SenderWithLogging(client.Sender)
+	}
 	tableService := client.GetTableService()
 	table := tableService.GetTableReference(purger.tableName)
 	purger.table = table
@@ -79,6 +82,8 @@ func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, ta
 
 // NewTablePurger creates a new Basic Purger
 func NewTablePurger(accountName, accountKey, tableName string, purgeEntitiesOlderThanDays, periodLengthInDays, numWorkers int, dryRun bool) (AzureTablePurger, error) {
+
+	// NewClientFromConnectionString
 	client, err := storage.NewBasicClient(accountName, accountKey)
 	if err != nil {
 		return nil, err
@@ -287,7 +292,7 @@ func (d *DefaultTablePurger) getOldestPartition(timeout uint) (string, error) {
 	queryOptions := &storage.QueryOptions{}
 	queryOptions.Filter = fmt.Sprintf("PartitionKey ne '%s'", "")
 	queryOptions.Select = []string{"PartitionKey"}
-	queryOptions.Top = 1
+	queryOptions.Top = 100
 	log.Debugf("Fetching oldest partition key for table %s with query %#v", d.tableName, queryOptions)
 	result, err := d.table.QueryEntities(timeout, storage.NoMetadata, queryOptions)
 	if err != nil {
@@ -295,7 +300,21 @@ func (d *DefaultTablePurger) getOldestPartition(timeout uint) (string, error) {
 		return "", err
 	}
 
-	if len(result.Entities) > 0 {
+	if len(result.Entities) <= 0 {
+		tableOptions := &storage.TableOptions{}
+		for result != nil && result.QueryNextLink.NextLink != nil {
+			result, err = result.NextResults(tableOptions)
+			if err != nil {
+				log.Error("Error fetching oldest partition key", err)
+				return "", err
+			}
+			if result != nil && len(result.Entities) > 0 {
+				break
+			}
+		}
+	}
+
+	if result != nil && len(result.Entities) > 0 {
 		oldestEntity := result.Entities[0]
 		oldestPartitionKey := oldestEntity.PartitionKey
 		log.Infof("Oldest partition key in '%s' table is %s (%s)", d.tableName, oldestPartitionKey, timeFromTicksAscendingWithLeadingZero(oldestPartitionKey))

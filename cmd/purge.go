@@ -49,6 +49,7 @@ func init() {
 	tableCmd.AddCommand(purgeCmd)
 	purgeCmd.Flags().IntVar(&purgeEntitiesOlderThanDays, "num-days-to-keep", 365, "Number of days to keep")
 	purgeCmd.Flags().IntVar(&periodLengthInDays, "num-days-per-worker", 90, "Number of days per worker")
+
 	purgeCmd.Flags().IntVar(&numWorkers, "num-workers", runtime.NumCPU()*2, "Number of workers. Default is cpus * 2")
 	purgeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Enable dry run mode")
 }
