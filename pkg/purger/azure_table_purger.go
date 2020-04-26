@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fabito/azure-storage-purger/pkg/util"
+	"github.com/rcrowley/go-metrics"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -21,6 +22,7 @@ type PurgeResult struct {
 	RowErrorCount   int64     `json:"row_error_count"`
 	StartTime       time.Time `json:"start_time"`
 	EndTime         time.Time `json:"end_time"`
+	// Metrics         Metrics
 	// MinDate         time.Time `json:"min_date"`
 	// MaxDate         time.Time `json:"max_date"`
 }
@@ -61,6 +63,7 @@ type DefaultTablePurger struct {
 	table                      *storage.Table
 	dryRun                     bool
 	result                     PurgeResult
+	Metrics                    *Metrics
 }
 
 // NewTablePurgerWithClient creates a new Basic Purger
@@ -71,6 +74,7 @@ func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, ta
 		periodLengthInDays:         periodLengthInDays,
 		numWorkers:                 numWorkers,
 		dryRun:                     dryRun,
+		Metrics:                    NewMetrics(),
 	}
 	if log.IsLevelEnabled(log.TraceLevel) {
 		client.Sender = util.SenderWithLogging(client.Sender)
@@ -142,20 +146,27 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		return d.result, err
 	}
 
-	log.Infof("Starting purging all entities created between %s and %s", start, end)
+	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.StandardLogger())
 
+	log.Infof("Starting purging all entities created between %s and %s", start, end)
 	process := func(batches <-chan *storage.TableBatch) <-chan *TableBatchResult {
 		processedBatchStream := make(chan *TableBatchResult)
 		go func() {
 			defer close(processedBatchStream)
 			for batch := range batches {
+				d.Metrics.RegisterTableBatchAttempt()
 				log.Debugf("Executing table batch with size %d", len(batch.BatchEntitySlice))
 				result := &TableBatchResult{Batch: batch}
 				if !d.dryRun {
+					start := time.Now()
 					err := batch.ExecuteBatch()
 					result.Error = err
 					if err != nil {
+						d.Metrics.RegisterTableBatchFailed()
 						log.Error(err)
+					} else {
+						d.Metrics.RegisterTableBatchDurationSince(start)
+						d.Metrics.RegisterTableBatchSuccess()
 					}
 				}
 				select {
@@ -184,6 +195,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		d.result.computeTableBatchResult(processedBatch)
 	}
 
+	log.Info(d.Metrics)
 	d.result.end()
 	return d.result, nil
 }
