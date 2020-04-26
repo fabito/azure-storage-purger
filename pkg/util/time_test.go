@@ -35,13 +35,13 @@ func TestTicksAscendingWithLeadingZero(t *testing.T) {
 
 func TestTimeFromTicksAscendingWithLeadingZero(t *testing.T) {
 	expected := time.Date(2018, 4, 26, 8, 44, 39, 0, time.UTC)
-	actual := timeFromTicksAscendingWithLeadingZero("0636603290790000000")
+	actual := TimeFromTicksAscendingWithLeadingZero("0636603290790000000")
 	assert.Equal(t, expected, actual)
 }
 
 func TestTimeFromTicksAscendingWithLeadingZero2(t *testing.T) {
 	expected := time.Date(2020, 4, 19, 23, 13, 25, 4987531, time.UTC)
-	actual := timeFromTicksAscendingWithLeadingZero("0637229348054987531")
+	actual := TimeFromTicksAscendingWithLeadingZero("0637229348054987531")
 	assert.Equal(t, expected, actual)
 }
 
@@ -59,7 +59,7 @@ func TestSplitPeriodsEven(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[1].End)
 
-	logPeriods(splits)
+	LogPeriods(splits)
 }
 
 func TestSplitPeriodsOdd(t *testing.T) {
@@ -76,7 +76,7 @@ func TestSplitPeriodsOdd(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[2].End)
 
-	logPeriods(splits)
+	LogPeriods(splits)
 }
 
 func TestSplitPeriodsSpecific(t *testing.T) {
@@ -96,7 +96,7 @@ func TestSplitPeriodsSpecific(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[15].End)
 
-	logPeriods(splits)
+	LogPeriods(splits)
 }
 
 func TestSplitPeriodsOneDay(t *testing.T) {
@@ -116,5 +116,5 @@ func TestSplitPeriodsOneDay(t *testing.T) {
 	assert.True(t, splits[1].End.After(splits[1].Start))
 	assert.Equal(t, end, splits[15].End)
 
-	logPeriods(splits)
+	LogPeriods(splits)
 }
