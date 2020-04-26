@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fabito/azure-storage-purger/pkg/metrics"
 	"github.com/fabito/azure-storage-purger/pkg/util"
-	"github.com/rcrowley/go-metrics"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -63,7 +64,7 @@ type DefaultTablePurger struct {
 	table                      *storage.Table
 	dryRun                     bool
 	result                     PurgeResult
-	Metrics                    *Metrics
+	Metrics                    *metrics.Metrics
 }
 
 // NewTablePurgerWithClient creates a new Basic Purger
@@ -74,7 +75,7 @@ func NewTablePurgerWithClient(client storage.Client, accountName, accountKey, ta
 		periodLengthInDays:         periodLengthInDays,
 		numWorkers:                 numWorkers,
 		dryRun:                     dryRun,
-		Metrics:                    NewMetrics(),
+		Metrics:                    metrics.NewMetrics(),
 	}
 	if log.IsLevelEnabled(log.TraceLevel) {
 		client.Sender = util.SenderWithLogging(client.Sender)
@@ -146,7 +147,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		return d.result, err
 	}
 
-	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.StandardLogger())
+	go d.Metrics.Log()
 
 	log.Infof("Starting purging all entities created between %s and %s", start, end)
 	process := func(batches <-chan *storage.TableBatch) <-chan *TableBatchResult {
