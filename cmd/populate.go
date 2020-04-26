@@ -3,7 +3,7 @@ package cmd
 import (
 	"time"
 
-	"github.com/fabito/azure-storage-purger/pkg/test"
+	"github.com/fabito/azure-storage-purger/pkg/populator"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +24,7 @@ var populateCmd = &cobra.Command{
 			log.Fatalf("Start %s cannot be in the future", start)
 		}
 
-		err := test.PopulateTable(accountName, accountKey, tableName, start, end, maxNumberOfEntitiesPerPartition)
+		err := populator.PopulateTable(accountName, accountKey, tableName, start, end, maxNumberOfEntitiesPerPartition)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -1,4 +1,4 @@
-package purger
+package util
 
 import (
 	"testing"

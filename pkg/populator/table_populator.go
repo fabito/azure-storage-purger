@@ -1,4 +1,4 @@
-package test
+package populator
 
 import (
 	"math/rand"
@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fabito/azure-storage-purger/pkg/util"
+	"github.com/rcrowley/go-metrics"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/fabito/azure-storage-purger/pkg/purger"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
@@ -29,7 +29,7 @@ type partition struct {
 	entities []*storage.Entity
 }
 
-func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates chan time.Time) chan *partition {
+func randomPartitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates chan time.Time) chan *partition {
 	yield := make(chan *partition)
 	rand.Seed(time.Now().UnixNano())
 	min := 1
@@ -37,7 +37,7 @@ func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates
 	go func() {
 		defer close(yield)
 		for m := range dates {
-			partitionKey := purger.TicksAscendingWithLeadingZero(purger.TicksFromTime(m))
+			partitionKey := util.TicksAscendingWithLeadingZero(util.TicksFromTime(m))
 			entitiesPerPartitionCount := rand.Intn(max-min+1) + min
 			p := &partition{
 				key:      partitionKey,
@@ -45,6 +45,31 @@ func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates
 			}
 			log.Debugf("Adding %d to %s ()", entitiesPerPartitionCount, partitionKey)
 			for i := 0; i < entitiesPerPartitionCount; i++ {
+				e := table.GetEntityReference(partitionKey, strconv.Itoa(i+1))
+				props := map[string]interface{}{
+					"CreatedOn": m,
+				}
+				e.Properties = props
+				p.entities[i] = e
+			}
+			yield <- p
+		}
+	}()
+	return yield
+}
+
+func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates chan time.Time) chan *partition {
+	yield := make(chan *partition)
+	go func() {
+		defer close(yield)
+		for m := range dates {
+			partitionKey := util.TicksAscendingWithLeadingZero(util.TicksFromTime(m))
+			p := &partition{
+				key:      partitionKey,
+				entities: make([]*storage.Entity, maxNumberOfEntitiesPerPartition),
+			}
+			log.Debugf("Adding %d to %s ()", maxNumberOfEntitiesPerPartition, partitionKey)
+			for i := 0; i < maxNumberOfEntitiesPerPartition; i++ {
 				e := table.GetEntityReference(partitionKey, strconv.Itoa(i+1))
 				props := map[string]interface{}{
 					"CreatedOn": m,
@@ -90,6 +115,10 @@ func createTable(storageAccountName, storageAccountKey, tableName string) (*stor
 		return nil, err
 	}
 
+	if log.IsLevelEnabled(log.TraceLevel) {
+		client.Sender = util.SenderWithLogging(client.Sender)
+	}
+
 	tableService := client.GetTableService()
 	table := tableService.GetTableReference(tableName)
 
@@ -114,14 +143,28 @@ func PopulateTable(storageAccountName, storageAccountKey, tableName string, star
 		return err
 	}
 
+	batchTimer := metrics.NewTimer()
+	metrics.Register("table_batch_success", batchTimer)
+	batchFailedTimer := metrics.NewTimer()
+	metrics.Register("table_batch_failure", batchFailedTimer)
 	log.Infof("Start %s population.", tableName)
 	log.Infof("Generating data from %s to %s", startDate, endDate)
 
 	var wg sync.WaitGroup
+
+	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.StandardLogger())
+
 	for batch := range batches(table, partitions(table, maxNumberOfEntitiesPerPartition, dates(startDate, endDate))) {
 		wg.Add(1)
 		go func(batch *storage.TableBatch) {
-			batch.ExecuteBatch()
+			start := time.Now()
+			err := batch.ExecuteBatch()
+			if err != nil {
+				batchFailedTimer.UpdateSince(start)
+				log.Error(err)
+			} else {
+				batchTimer.UpdateSince(start)
+			}
 			wg.Done()
 		}(batch)
 	}

@@ -1,4 +1,4 @@
-package purger
+package util
 
 import (
 	"fmt"
@@ -50,7 +50,7 @@ func (p Period) String() string {
 	return fmt.Sprintf("%s -> %s (%s)", p.Start.Format(time.RFC3339), p.End.Format(time.RFC3339), p.Duration())
 }
 
-func logPeriods(splits []Period) {
+func LogPeriods(splits []Period) {
 	for index, period := range splits {
 		log.Infof("#%d: %s", index, period)
 	}
@@ -79,7 +79,7 @@ func TicksAscendingWithLeadingZero(ticks int64) string {
 	return ticksStr
 }
 
-func timeFromTicksAscendingWithLeadingZero(ticksStr string) time.Time {
+func TimeFromTicksAscendingWithLeadingZero(ticksStr string) time.Time {
 	ticks, _ := strconv.ParseInt(ticksStr, 10, 64)
 	return TimeFromTicks(ticks)
 }
