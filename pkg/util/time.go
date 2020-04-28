@@ -12,6 +12,7 @@ import (
 
 const ticksAtEpock int64 = 621355968000000000
 const ticksPerMillisecond int64 = 10000
+const parsePeriodLayout = "2006-01-02"
 
 // Period represet a period iof time
 type Period struct {
@@ -29,6 +30,19 @@ func NewPeriod(start, end time.Time) (*Period, error) {
 		End:   end,
 	}
 	return period, nil
+}
+
+// ParsePeriod parse RFC3339 formated strings into Period
+func ParsePeriod(start, end string) (*Period, error) {
+	s, err := time.Parse(parsePeriodLayout, start)
+	if err != nil {
+		return nil, err
+	}
+	e, err := time.Parse(parsePeriodLayout, end)
+	if err != nil {
+		return nil, err
+	}
+	return NewPeriod(s, e.AddDate(0, 0, 1).Add(-time.Second))
 }
 
 // Duration the Periods's time.Duration

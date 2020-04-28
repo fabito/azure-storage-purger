@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/fabito/azure-storage-purger/pkg/purger"
+	"github.com/fabito/azure-storage-purger/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +14,8 @@ var (
 	periodLengthInHours        int
 	dryRun                     bool
 	usePool                    bool
+	startDate                  string
+	endDate                    string
 )
 
 // purgeCmd represents the purge command
@@ -28,14 +31,25 @@ var purgeCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		result, err := purger.PurgeEntities()
+		period, err := util.ParsePeriod(startDate, endDate)
 		if err != nil {
-			log.Fatal(err)
+			result, err := purger.PurgeEntities()
+			if err != nil {
+				log.Fatal(err)
+			}
+			if result.HasErrors() {
+				os.Exit(1)
+			}
+		} else {
+			result, err := purger.PurgeEntitiesWithin(period)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if result.HasErrors() {
+				os.Exit(1)
+			}
 		}
 
-		if result.HasErrors() {
-			os.Exit(1)
-		}
 	},
 }
 
@@ -43,6 +57,9 @@ func init() {
 	tableCmd.AddCommand(purgeCmd)
 	purgeCmd.Flags().IntVar(&purgeEntitiesOlderThanDays, "num-days-to-keep", 365, "Number of days to keep")
 	purgeCmd.Flags().IntVar(&periodLengthInHours, "num-hours-per-worker", 24, "Number of hours per worker")
+
+	purgeCmd.Flags().StringVar(&startDate, "start-date", "", "The start date")
+	purgeCmd.Flags().StringVar(&endDate, "end-date", "", "The end date")
 
 	purgeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Enable dry run mode")
 	purgeCmd.Flags().BoolVar(&usePool, "use-pool", false, "Enable worker pool mode")

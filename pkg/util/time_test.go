@@ -118,3 +118,13 @@ func TestSplitPeriodsOneDay(t *testing.T) {
 
 	LogPeriods(splits)
 }
+
+func TestParsePeriod(t *testing.T) {
+	start := time.Date(2018, 7, 11, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2018, 7, 12, 23, 59, 59, 0, time.UTC)
+	expected, _ := NewPeriod(start, end)
+	actual, err := ParsePeriod("2018-07-11", "2018-07-12")
+	if assert.NoError(t, err) {
+		assert.Equal(t, expected, actual)
+	}
+}

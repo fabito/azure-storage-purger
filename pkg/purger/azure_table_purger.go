@@ -60,6 +60,7 @@ func (p *PurgeResult) HasErrors() bool {
 // AzureTablePurger purges entities from Storage Tables
 type AzureTablePurger interface {
 	PurgeEntities() (PurgeResult, error)
+	PurgeEntitiesWithin(period *util.Period) (PurgeResult, error)
 }
 
 // DefaultTablePurger default table purger
@@ -223,20 +224,11 @@ func (d *DefaultTablePurger) purgeEntitiesUsingFanIn(done chan interface{}, peri
 
 // PurgeEntities sdf
 func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
-	if d.dryRun {
-		log.Warn("Dry run is ENABLED")
-	}
-	d.result = PurgeResult{StartTime: time.Now().UTC()}
-	done := make(chan interface{})
-	defer close(done)
-
 	startPartitionKey, err := d.getOldestPartition(timeout)
-
 	if err != nil {
 		d.result.end(d.Metrics)
 		return d.result, err
 	}
-
 	endPartitionKey := util.GetMaximumPartitionKeyToDelete(d.purgeEntitiesOlderThanDays)
 	start := util.TimeFromTicksAscendingWithLeadingZero(startPartitionKey)
 	end := util.TimeFromTicksAscendingWithLeadingZero(endPartitionKey)
@@ -247,6 +239,18 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 		return d.result, err
 	}
 	period, _ := util.NewPeriod(start, end)
+	return d.PurgeEntitiesWithin(period)
+}
+
+// PurgeEntitiesWithin all entities within Period
+func (d *DefaultTablePurger) PurgeEntitiesWithin(period *util.Period) (PurgeResult, error) {
+	if d.dryRun {
+		log.Warn("Dry run is ENABLED")
+	}
+	d.result = PurgeResult{StartTime: time.Now().UTC()}
+	done := make(chan interface{})
+	defer close(done)
+
 	log.Infof("Starting purging all entities created between %s and %s", period.Start, period.End)
 
 	go d.Metrics.Log()
