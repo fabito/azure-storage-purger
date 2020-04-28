@@ -22,6 +22,10 @@ const (
 	tableBatchDuration     = "table_batch_duration"
 	entitiesTotal          = "entities_total"
 	partitionTotal         = "partition_total"
+	pageTotal              = "query_page_total"
+	pageSucesssTotal       = "query_page_success_total"
+	pageFailureTotal       = "query_page_failure_total"
+	pageDuration           = "pageDuration"
 )
 
 // NewMetrics dafg
@@ -30,6 +34,12 @@ func NewMetrics() *Metrics {
 	metrics.Register(tableBatchSuccessTotal, metrics.NewCounter())
 	metrics.Register(tableBatchFailureTotal, metrics.NewCounter())
 	metrics.Register(tableBatchDuration, metrics.NewTimer())
+
+	metrics.Register(pageTotal, metrics.NewCounter())
+	metrics.Register(pageSucesssTotal, metrics.NewCounter())
+	metrics.Register(pageFailureTotal, metrics.NewCounter())
+	metrics.Register(pageDuration, metrics.NewTimer())
+
 	metrics.Register(entitiesTotal, metrics.NewMeter())
 	metrics.Register(partitionTotal, metrics.NewMeter())
 
@@ -146,6 +156,53 @@ func (m Metrics) String() string {
 	return b1.String()
 }
 
+// RegisterPageAttempt
+func (m *Metrics) RegisterPageAttempt() {
+	if c, ok := m.metricsRegistry.Get(pageTotal).(metrics.Counter); ok {
+		c.Inc(1)
+	}
+}
+
+// RegisterPageFailed
+func (m *Metrics) RegisterPageFailed() {
+	if c, ok := m.metricsRegistry.Get(pageFailureTotal).(metrics.Counter); ok {
+		c.Inc(1)
+	}
+}
+
+// RegisterPageSuccess
+func (m *Metrics) RegisterPageSuccess() {
+	if c, ok := m.metricsRegistry.Get(pageSucesssTotal).(metrics.Counter); ok {
+		c.Inc(1)
+	}
+}
+
+// RegisterPageDurationSince updates duration since start time
+func (m *Metrics) RegisterPageDurationSince(start time.Time) {
+	if c, ok := m.metricsRegistry.Get(pageDuration).(metrics.Timer); ok {
+		c.UpdateSince(start)
+	}
+}
+
+func (m *Metrics) BatchErrorCount() int64 {
+	if c, ok := m.metricsRegistry.Get(tableBatchFailureTotal).(metrics.Counter); ok {
+		return c.Count()
+	}
+	return -1
+}
+func (m *Metrics) BatchCount() int64 {
+	if c, ok := m.metricsRegistry.Get(tableBatchSuccessTotal).(metrics.Counter); ok {
+		return c.Count()
+	}
+	return -1
+}
+func (m *Metrics) EntityCount() int64 {
+	if c, ok := m.metricsRegistry.Get(entitiesTotal).(metrics.Meter); ok {
+		return c.Count()
+	}
+	return -1
+}
+
 func (m *Metrics) Log() {
-	metrics.LogScaled(m.metricsRegistry, 5*time.Second, time.Millisecond, log.StandardLogger())
+	metrics.LogScaled(m.metricsRegistry, 10*time.Second, time.Millisecond, log.StandardLogger())
 }
