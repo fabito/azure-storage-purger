@@ -1,6 +1,7 @@
-package purger
+package util
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,6 +17,18 @@ const ticksPerMillisecond int64 = 10000
 type Period struct {
 	Start time.Time
 	End   time.Time
+}
+
+//NewPeriod creates a new period instance
+func NewPeriod(start, end time.Time) (*Period, error) {
+	if start.After(end) {
+		return nil, errors.New("End before start")
+	}
+	period := &Period{
+		Start: start,
+		End:   end,
+	}
+	return period, nil
 }
 
 // Duration the Periods's time.Duration
@@ -46,11 +59,17 @@ func (p *Period) SplitsFrom(numSplits int) []Period {
 	return splits
 }
 
+func (p *Period) Split(duration time.Duration) []Period {
+	totalDuration := p.Duration()
+	numSplits := totalDuration.Milliseconds() / duration.Milliseconds()
+	return p.SplitsFrom(int(numSplits))
+}
+
 func (p Period) String() string {
 	return fmt.Sprintf("%s -> %s (%s)", p.Start.Format(time.RFC3339), p.End.Format(time.RFC3339), p.Duration())
 }
 
-func logPeriods(splits []Period) {
+func LogPeriods(splits []Period) {
 	for index, period := range splits {
 		log.Infof("#%d: %s", index, period)
 	}
@@ -79,7 +98,7 @@ func TicksAscendingWithLeadingZero(ticks int64) string {
 	return ticksStr
 }
 
-func timeFromTicksAscendingWithLeadingZero(ticksStr string) time.Time {
+func TimeFromTicksAscendingWithLeadingZero(ticksStr string) time.Time {
 	ticks, _ := strconv.ParseInt(ticksStr, 10, 64)
 	return TimeFromTicks(ticks)
 }

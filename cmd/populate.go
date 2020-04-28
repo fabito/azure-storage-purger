@@ -3,18 +3,20 @@ package cmd
 import (
 	"time"
 
-	"github.com/fabito/azure-storage-purger/pkg/test"
+	"github.com/fabito/azure-storage-purger/pkg/populator"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-var maxNumberOfEntitiesPerPartition int
-var startYear int
+var (
+	maxNumberOfEntitiesPerPartition int
+	startYear                       int
+)
 
 // populateCmd represents the populate command
 var populateCmd = &cobra.Command{
 	Use:   "populate",
-	Short: "Add dummy data to Azure Storage Table",
+	Short: "Create and add dummy data to an Azure Storage Tablefor testing purposes",
 	Long:  `This is used for testing the purge command`,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Date(startYear, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -24,7 +26,7 @@ var populateCmd = &cobra.Command{
 			log.Fatalf("Start %s cannot be in the future", start)
 		}
 
-		err := test.PopulateTable(accountName, accountKey, tableName, start, end, maxNumberOfEntitiesPerPartition)
+		err := populator.PopulateTable(accountName, accountKey, tableName, start, end, maxNumberOfEntitiesPerPartition, numWorkers)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -33,10 +35,6 @@ var populateCmd = &cobra.Command{
 
 func init() {
 	tableCmd.AddCommand(populateCmd)
-
-	populateCmd.Flags().IntVar(&maxNumberOfEntitiesPerPartition, "max-num-entities", 1, "Number of entities per partition")
-	populateCmd.MarkFlagRequired("max-num-entities")
-
+	populateCmd.Flags().IntVar(&maxNumberOfEntitiesPerPartition, "max-num-entities", 5000, "Number of entities per partition")
 	populateCmd.Flags().IntVar(&startYear, "start-year", 2018, "Star year for data generation")
-
 }

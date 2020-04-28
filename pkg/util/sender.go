@@ -1,4 +1,4 @@
-package purger
+package util
 
 import (
 	"net/http"
@@ -29,8 +29,10 @@ func SenderWithLogging(s storage.Sender) storage.Sender {
 			} else {
 				log.Tracef("%s %s received %s", r.Method, r.URL, resp.Status)
 			}
-			for k, v := range resp.Header {
-				log.Tracef("%s=%s", k, v)
+			if resp != nil {
+				for k, v := range resp.Header {
+					log.Tracef("%s=%s", k, v)
+				}
 			}
 
 			// log.Trace(resp.Body)
