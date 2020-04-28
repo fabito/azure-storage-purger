@@ -60,7 +60,7 @@ func randomPartitions(table *storage.Table, maxNumberOfEntitiesPerPartition int,
 	return yield
 }
 
-func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates chan time.Time) chan *partition {
+func partitions(table *storage.Table, metrics *metrics.Metrics, maxNumberOfEntitiesPerPartition int, dates chan time.Time) chan *partition {
 	yield := make(chan *partition)
 	go func() {
 		defer close(yield)
@@ -70,7 +70,7 @@ func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates
 				key:      partitionKey,
 				entities: make([]*storage.Entity, maxNumberOfEntitiesPerPartition),
 			}
-			log.Debugf("Adding %d to %s ()", maxNumberOfEntitiesPerPartition, partitionKey)
+			log.Debugf("Adding %d entities to %s (%s)", maxNumberOfEntitiesPerPartition, partitionKey, m)
 			for i := 0; i < maxNumberOfEntitiesPerPartition; i++ {
 				e := table.GetEntityReference(partitionKey, strconv.Itoa(i+1))
 				props := map[string]interface{}{
@@ -80,6 +80,7 @@ func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates
 				p.entities[i] = e
 			}
 			yield <- p
+			metrics.RegisterPartitionsProcessed(1)
 		}
 	}()
 	return yield
@@ -170,6 +171,7 @@ func (t *tableBatchRunner) Task() {
 		t.metrics.RegisterTableBatchFailed()
 		log.Error(err)
 	} else {
+		t.metrics.RegisterEntitiesProcessed(int64(len(t.batch.BatchEntitySlice)))
 		t.metrics.RegisterTableBatchDurationSince(start)
 		t.metrics.RegisterTableBatchSuccess()
 	}
@@ -187,9 +189,10 @@ func (t *tablePartitionRunner) Task() {
 		start := time.Now()
 		err := batch.ExecuteBatch()
 		if err != nil {
-			t.metrics.RegisterTableBatchFailed()
 			log.Error(err)
+			t.metrics.RegisterTableBatchFailed()
 		} else {
+			t.metrics.RegisterEntitiesProcessed(int64(len(batch.BatchEntitySlice)))
 			t.metrics.RegisterTableBatchDurationSince(start)
 			t.metrics.RegisterTableBatchSuccess()
 		}
@@ -199,21 +202,16 @@ func (t *tablePartitionRunner) Task() {
 // PopulateTable populates table with dummy test data
 func PopulateTable(storageAccountName, storageAccountKey, tableName string, startDate, endDate time.Time, maxNumberOfEntitiesPerPartition, numWorkers int) error {
 	table, err := createTable(storageAccountName, storageAccountKey, tableName)
-
 	if err != nil {
 		return err
 	}
 
 	metrics := metrics.NewMetrics()
-
 	log.Infof("Start %s population.", tableName)
-
 	p := work.New(numWorkers)
 	var wg sync.WaitGroup
-
 	go metrics.Log()
-
-	for partition := range partitions(table, maxNumberOfEntitiesPerPartition, dates(startDate, endDate)) {
+	for partition := range partitions(table, metrics, maxNumberOfEntitiesPerPartition, dates(startDate, endDate)) {
 		wg.Add(1)
 		job := tablePartitionRunner{metrics: metrics, partition: partition, table: table}
 		go func() {
@@ -226,5 +224,7 @@ func PopulateTable(storageAccountName, storageAccountKey, tableName string, star
 	// Shutdown the work pool and wait for all existing work
 	// to be completed.
 	p.Shutdown()
+	log.Info("Summary")
+	log.Info(metrics)
 	return nil
 }

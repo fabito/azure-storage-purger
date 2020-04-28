@@ -2,7 +2,11 @@
 // Example provided with help from Jason Waldrip.
 package work
 
-import "sync"
+import (
+	"sync"
+
+	log "github.com/sirupsen/logrus"
+)
 
 // Worker must be implemented by types that want to use
 // the work pool.
@@ -19,6 +23,7 @@ type Pool struct {
 
 // New creates a new work pool.
 func New(maxGoroutines int) *Pool {
+	log.Debugf("Creating new pool with %d", maxGoroutines)
 	p := Pool{
 		work: make(chan Worker),
 	}

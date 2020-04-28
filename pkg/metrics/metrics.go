@@ -30,6 +30,8 @@ func NewMetrics() *Metrics {
 	metrics.Register(tableBatchSuccessTotal, metrics.NewCounter())
 	metrics.Register(tableBatchFailureTotal, metrics.NewCounter())
 	metrics.Register(tableBatchDuration, metrics.NewTimer())
+	metrics.Register(entitiesTotal, metrics.NewMeter())
+	metrics.Register(partitionTotal, metrics.NewMeter())
 
 	return &Metrics{
 		metricsRegistry: metrics.DefaultRegistry,
@@ -61,6 +63,20 @@ func (m *Metrics) RegisterTableBatchSuccess() {
 func (m *Metrics) RegisterTableBatchDurationSince(start time.Time) {
 	if c, ok := m.metricsRegistry.Get(tableBatchDuration).(metrics.Timer); ok {
 		c.UpdateSince(start)
+	}
+}
+
+// RegisterEntitiesProcessed updates duration since start time
+func (m *Metrics) RegisterEntitiesProcessed(numEntities int64) {
+	if c, ok := m.metricsRegistry.Get(entitiesTotal).(metrics.Meter); ok {
+		c.Mark(numEntities)
+	}
+}
+
+// RegisterPartitionsProcessed updates duration since start time
+func (m *Metrics) RegisterPartitionsProcessed(numPartitions int64) {
+	if c, ok := m.metricsRegistry.Get(partitionTotal).(metrics.Meter); ok {
+		c.Mark(numPartitions)
 	}
 }
 

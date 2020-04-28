@@ -166,6 +166,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 						d.Metrics.RegisterTableBatchFailed()
 						log.Error(err)
 					} else {
+						d.Metrics.RegisterEntitiesProcessed(int64(len(batch.BatchEntitySlice)))
 						d.Metrics.RegisterTableBatchDurationSince(start)
 						d.Metrics.RegisterTableBatchSuccess()
 					}
