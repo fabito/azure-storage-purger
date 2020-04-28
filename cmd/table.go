@@ -4,13 +4,12 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	accountName string
-	accountKey  string
-	tableName   string
-	numWorkers  int
+	tableName  string
+	numWorkers int
 )
 
 // tableCmd represents the table command
@@ -23,14 +22,13 @@ var tableCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(tableCmd)
 
-	// os.Getenv("AZP_STORAGE_ACCOUNT_NAME")
-	// os.Getenv("AZP_STORAGE_ACCOUNT_KEY")
+	tableCmd.PersistentFlags().String("account-name", "", "The storage account name")
+	// tableCmd.MarkPersistentFlagRequired("account-name")
+	viper.BindPFlag("account-name", tableCmd.PersistentFlags().Lookup("account-name"))
 
-	tableCmd.PersistentFlags().StringVar(&accountName, "account-name", "", "The storage account name")
-	tableCmd.MarkPersistentFlagRequired("account-name")
-
-	tableCmd.PersistentFlags().StringVar(&accountKey, "account-key", "", "The storage account key")
-	tableCmd.MarkPersistentFlagRequired("account-key")
+	tableCmd.PersistentFlags().String("account-key", "", "The storage account key")
+	// tableCmd.MarkPersistentFlagRequired("account-key")
+	viper.BindPFlag("account-key", tableCmd.PersistentFlags().Lookup("account-key"))
 
 	tableCmd.PersistentFlags().StringVar(&tableName, "table-name", "", "The storage table name")
 	tableCmd.MarkPersistentFlagRequired("table-name")

@@ -335,7 +335,7 @@ func (d *DefaultTablePurger) partitions(done <-chan interface{}, queryResults <-
 		for result := range queryResults {
 
 			if result.Error != nil {
-				log.Warn("Skipping query result in failed state.")
+				log.Error(result.Error)
 				continue
 			}
 

@@ -6,6 +6,7 @@ import (
 	"github.com/fabito/azure-storage-purger/pkg/populator"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -19,6 +20,10 @@ var populateCmd = &cobra.Command{
 	Short: "Create and add dummy data to an Azure Storage Tablefor testing purposes",
 	Long:  `This is used for testing the purge command`,
 	Run: func(cmd *cobra.Command, args []string) {
+
+		accountName := viper.GetString("account-name")
+		accountKey := viper.GetString("account-key")
+
 		start := time.Date(startYear, 1, 1, 0, 0, 0, 0, time.UTC)
 		end := time.Now().UTC()
 

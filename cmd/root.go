@@ -3,10 +3,12 @@ package cmd
 import (
 	"io"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var v string
@@ -39,6 +41,11 @@ func setUpLogs(out io.Writer, level string) error {
 
 func init() {
 	cobra.OnInitialize()
+	viper.SetEnvPrefix("azp") // Set the environment prefix to AZP_*
+	viper.AutomaticEnv()      // Automatically search for environment variables
+	replacer := strings.NewReplacer("-", "_")
+	viper.SetEnvKeyReplacer(replacer)
+
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		if err := setUpLogs(os.Stdout, v); err != nil {
 			return err

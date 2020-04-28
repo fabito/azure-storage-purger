@@ -7,6 +7,7 @@ import (
 	"github.com/fabito/azure-storage-purger/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -25,6 +26,9 @@ var purgeCmd = &cobra.Command{
 	Long:  `Purges entities older than purgeEntitiesOlderThanDays`,
 	Run: func(cmd *cobra.Command, args []string) {
 		log.Info("Starting purge")
+
+		accountName := viper.GetString("account-name")
+		accountKey := viper.GetString("account-key")
 
 		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInHours, numWorkers, usePool, dryRun)
 		if err != nil {
