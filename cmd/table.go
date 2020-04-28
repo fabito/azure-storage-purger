@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"runtime"
+
 	"github.com/spf13/cobra"
 )
 
@@ -8,6 +10,7 @@ var (
 	accountName string
 	accountKey  string
 	tableName   string
+	numWorkers  int
 )
 
 // tableCmd represents the table command
@@ -31,4 +34,7 @@ func init() {
 
 	tableCmd.PersistentFlags().StringVar(&tableName, "table-name", "", "The storage table name")
 	tableCmd.MarkPersistentFlagRequired("table-name")
+
+	tableCmd.PersistentFlags().IntVar(&numWorkers, "num-workers", runtime.NumCPU()*4, "Number of workers. Default is cpus * 4")
+
 }

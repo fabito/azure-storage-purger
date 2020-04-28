@@ -128,7 +128,7 @@ func (d *DefaultTablePurger) PurgeEntities() (PurgeResult, error) {
 	d.result = PurgeResult{StartTime: time.Now().UTC()}
 	done := make(chan interface{})
 	defer close(done)
-	var timeout uint = 120
+	var timeout uint = 30
 
 	startPartitionKey, err := d.getOldestPartition(timeout)
 

@@ -8,8 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var maxNumberOfEntitiesPerPartition int
-var startYear int
+var (
+	maxNumberOfEntitiesPerPartition int
+	startYear                       int
+)
 
 // populateCmd represents the populate command
 var populateCmd = &cobra.Command{
@@ -24,7 +26,7 @@ var populateCmd = &cobra.Command{
 			log.Fatalf("Start %s cannot be in the future", start)
 		}
 
-		err := populator.PopulateTable(accountName, accountKey, tableName, start, end, maxNumberOfEntitiesPerPartition)
+		err := populator.PopulateTable(accountName, accountKey, tableName, start, end, maxNumberOfEntitiesPerPartition, numWorkers)
 		if err != nil {
 			log.Fatal(err)
 		}

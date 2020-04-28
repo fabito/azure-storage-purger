@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fabito/azure-storage-purger/pkg/metrics"
 	"github.com/fabito/azure-storage-purger/pkg/util"
-	"github.com/rcrowley/go-metrics"
+	"github.com/fabito/azure-storage-purger/pkg/work"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -15,6 +16,7 @@ import (
 
 func dates(start, end time.Time) chan time.Time {
 	yield := make(chan time.Time)
+	log.Infof("Generating data from %s to %s", start, end)
 	go func() {
 		defer close(yield)
 		for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
@@ -83,6 +85,25 @@ func partitions(table *storage.Table, maxNumberOfEntitiesPerPartition int, dates
 	return yield
 }
 
+func batchesFromPartition(table *storage.Table, p *partition) []*storage.TableBatch {
+	chunkSize := 100
+	entities := p.entities
+	count := len(entities)
+	batches := make([]*storage.TableBatch, 0)
+	for i := 0; i < count; i += chunkSize {
+		end := i + chunkSize
+		if end > count {
+			end = count
+		}
+		tableBatch := table.NewBatch()
+		for _, entity := range entities[i:end] {
+			tableBatch.InsertOrMergeEntityByForce(entity)
+		}
+		batches = append(batches, tableBatch)
+	}
+	return batches
+}
+
 func batches(table *storage.Table, partitions chan *partition) chan *storage.TableBatch {
 	yield := make(chan *storage.TableBatch)
 	chunkSize := 100
@@ -135,40 +156,75 @@ func createTable(storageAccountName, storageAccountKey, tableName string) (*stor
 	return table, nil
 }
 
+type tableBatchRunner struct {
+	batch   *storage.TableBatch
+	metrics *metrics.Metrics
+}
+
+// Task implements the Worker interface.
+func (t *tableBatchRunner) Task() {
+	t.metrics.RegisterTableBatchAttempt()
+	start := time.Now()
+	err := t.batch.ExecuteBatch()
+	if err != nil {
+		t.metrics.RegisterTableBatchFailed()
+		log.Error(err)
+	} else {
+		t.metrics.RegisterTableBatchDurationSince(start)
+		t.metrics.RegisterTableBatchSuccess()
+	}
+}
+
+type tablePartitionRunner struct {
+	partition *partition
+	metrics   *metrics.Metrics
+	table     *storage.Table
+}
+
+func (t *tablePartitionRunner) Task() {
+	for _, batch := range batchesFromPartition(t.table, t.partition) {
+		t.metrics.RegisterTableBatchAttempt()
+		start := time.Now()
+		err := batch.ExecuteBatch()
+		if err != nil {
+			t.metrics.RegisterTableBatchFailed()
+			log.Error(err)
+		} else {
+			t.metrics.RegisterTableBatchDurationSince(start)
+			t.metrics.RegisterTableBatchSuccess()
+		}
+	}
+}
+
 // PopulateTable populates table with dummy test data
-func PopulateTable(storageAccountName, storageAccountKey, tableName string, startDate, endDate time.Time, maxNumberOfEntitiesPerPartition int) error {
+func PopulateTable(storageAccountName, storageAccountKey, tableName string, startDate, endDate time.Time, maxNumberOfEntitiesPerPartition, numWorkers int) error {
 	table, err := createTable(storageAccountName, storageAccountKey, tableName)
 
 	if err != nil {
 		return err
 	}
 
-	batchTimer := metrics.NewTimer()
-	metrics.Register("table_batch_success", batchTimer)
-	batchFailedTimer := metrics.NewTimer()
-	metrics.Register("table_batch_failure", batchFailedTimer)
-	log.Infof("Start %s population.", tableName)
-	log.Infof("Generating data from %s to %s", startDate, endDate)
+	metrics := metrics.NewMetrics()
 
+	log.Infof("Start %s population.", tableName)
+
+	p := work.New(numWorkers)
 	var wg sync.WaitGroup
 
-	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.StandardLogger())
+	go metrics.Log()
 
-	for batch := range batches(table, partitions(table, maxNumberOfEntitiesPerPartition, dates(startDate, endDate))) {
+	for partition := range partitions(table, maxNumberOfEntitiesPerPartition, dates(startDate, endDate)) {
 		wg.Add(1)
-		go func(batch *storage.TableBatch) {
-			start := time.Now()
-			err := batch.ExecuteBatch()
-			if err != nil {
-				batchFailedTimer.UpdateSince(start)
-				log.Error(err)
-			} else {
-				batchTimer.UpdateSince(start)
-			}
+		job := tablePartitionRunner{metrics: metrics, partition: partition, table: table}
+		go func() {
+			p.Run(&job)
 			wg.Done()
-		}(batch)
+		}()
 	}
 	wg.Wait()
 
+	// Shutdown the work pool and wait for all existing work
+	// to be completed.
+	p.Shutdown()
 	return nil
 }

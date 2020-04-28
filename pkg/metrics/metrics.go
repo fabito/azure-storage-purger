@@ -20,6 +20,8 @@ const (
 	tableBatchSuccessTotal = "table_batch_success_total"
 	tableBatchFailureTotal = "table_batch_failure_total"
 	tableBatchDuration     = "table_batch_duration"
+	entitiesTotal          = "entities_total"
+	partitionTotal         = "partition_total"
 )
 
 // NewMetrics dafg
@@ -129,5 +131,5 @@ func (m Metrics) String() string {
 }
 
 func (m *Metrics) Log() {
-	metrics.Log(m.metricsRegistry, 5*time.Second, log.StandardLogger())
+	metrics.LogScaled(m.metricsRegistry, 5*time.Second, time.Millisecond, log.StandardLogger())
 }
