@@ -2,6 +2,7 @@ package container
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -10,20 +11,22 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-type ContainerStatsGatherer struct {
+// StatsGatherer simple implementation
+type StatsGatherer struct {
 	blobService *storage.BlobStorageClient
 }
 
-func NewContainerStatsGatherer(accountName, accountKey string) (*ContainerStatsGatherer, error) {
+// NewStatsGatherer creates a new StatsGatherer
+func NewStatsGatherer(accountName, accountKey string) (*StatsGatherer, error) {
 	client, err := storage.NewBasicClient(accountName, accountKey)
 	if err != nil {
 		return nil, err
 	}
 	blobService := client.GetBlobService()
-	return &ContainerStatsGatherer{blobService: &blobService}, nil
+	return &StatsGatherer{blobService: &blobService}, nil
 }
 
-func (c *ContainerStatsGatherer) listContainers() ([]storage.Container, error) {
+func (c *StatsGatherer) listContainers() ([]storage.Container, error) {
 	log.Debug("Listing containers")
 	containers := make([]storage.Container, 0)
 	listParams := storage.ListContainersParameters{}
@@ -43,7 +46,7 @@ func (c *ContainerStatsGatherer) listContainers() ([]storage.Container, error) {
 
 type callback func(blob storage.Blob)
 
-func (c *ContainerStatsGatherer) forEachBlobInContainer(container *storage.Container, cb callback) error {
+func (c *StatsGatherer) forEachBlobInContainer(container *storage.Container, cb callback) error {
 	listParams := storage.ListBlobsParameters{}
 	response, err := container.ListBlobs(listParams)
 	if err != nil {
@@ -68,38 +71,76 @@ func (c *ContainerStatsGatherer) forEachBlobInContainer(container *storage.Conta
 	return nil
 }
 
-func (c *ContainerStatsGatherer) computeContainerSize(container *storage.Container) (int64, error) {
-	log.Infof("Computing size for %s", container.Name)
+func (c *StatsGatherer) computeStats(container *storage.Container) (Stats, error) {
+	log.Infof("Computing stats for %s", container.Name)
+	ct := Stats{Name: container.Name}
 	totalSize := int64(0)
+	blobCount := int64(0)
 	sizer := func(blob storage.Blob) {
 		totalSize += blob.Properties.ContentLength
+		blobCount++
 	}
 	err := c.forEachBlobInContainer(container, sizer)
 	if err != nil {
-		return totalSize, err
+		return ct, err
 	}
-	return totalSize, nil
+	ct.BlobCount = blobCount
+	ct.Size = uint64(totalSize)
+	log.Info(ct)
+	return ct, nil
 }
 
-type ContainerStats struct {
+// Stats holds the computed stats
+type Stats struct {
 	Name      string
 	Size      uint64
-	BlobCount uint64
+	BlobCount int64
 	Oldest    time.Time
 	Newest    time.Time
 }
 
-func (c ContainerStats) string() string {
-	return fmt.Sprintf("%s %s", c.Name, humanize.Bytes(c.Size))
+func (c Stats) string() string {
+	return fmt.Sprintf("%s contains %s blob(s) using a total of %s", c.Name, humanize.Comma(c.BlobCount), humanize.Bytes(c.Size))
 }
 
-func (c *ContainerStatsGatherer) GetContainerSizes() ([]ContainerStats, error) {
-	cotainerList, _ := c.listContainers()
-	containers := make([]ContainerStats, len(cotainerList))
-	for _, container := range cotainerList {
-		containerSize, _ := c.computeContainerSize(&container)
-		ct := ContainerStats{Name: container.Name, Size: uint64(containerSize)}
-		containers = append(containers, ct)
+// GatherStatistics Compute stats for all containers
+func (c *StatsGatherer) GatherStatistics() ([]Stats, error) {
+	numWorkers := runtime.NumCPU() * 2
+	done := make(chan interface{})
+	defer close(done)
+
+	containerSlice, _ := c.listContainers()
+	numJobs := len(containerSlice)
+	jobs := make(chan storage.Container, numJobs)
+	results := make(chan Stats, numJobs)
+
+	for w := 1; w <= numWorkers; w++ {
+		go func(id int, done chan interface{}, jobs chan storage.Container, results chan Stats) {
+			for j := range jobs {
+				ct, _ := c.computeStats(&j)
+				select {
+				case <-done:
+					return
+				case results <- ct:
+				}
+			}
+		}(w, done, jobs, results)
 	}
+
+	for _, container := range containerSlice {
+		select {
+		case <-done:
+			break
+		case jobs <- container:
+		}
+	}
+	close(jobs)
+
+	containers := make([]Stats, numJobs)
+
+	for result := range results {
+		containers = append(containers, result)
+	}
+
 	return containers, nil
 }

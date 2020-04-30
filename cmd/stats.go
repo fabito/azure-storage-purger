@@ -9,29 +9,24 @@ import (
 
 var ()
 
-// statsCmd represents the populate command
+// statsCmd represents the stats command
 var statsCmd = &cobra.Command{
 	Use:   "stats",
-	Short: "Gather statistics about containers in a Storage Account",
+	Short: "Gather statistics about all containers in a Storage Account",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 
 		accountName := viper.GetString("account-name")
 		accountKey := viper.GetString("account-key")
 
-		// cmd.Flags().GetString()
-
-		log.Debug(accountName)
-		log.Debug(accountKey)
-
-		s, err := container.NewContainerStatsGatherer(accountName, accountKey)
+		s, err := container.NewStatsGatherer(accountName, accountKey)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		containers, _ := s.GetContainerSizes()
+		containers, _ := s.GatherStatistics()
 		for _, c := range containers {
-			log.Infof("%s : %d", c.Name, c.Size)
+			log.Info(c)
 		}
 
 	},
@@ -39,6 +34,4 @@ var statsCmd = &cobra.Command{
 
 func init() {
 	containerCmd.AddCommand(statsCmd)
-	// statsCmd.Flags().IntVar(&maxNumberOfEntitiesPerPartition, "max-num-entities", 5000, "Number of entities per partition")
-	// statsCmd.Flags().IntVar(&startYear, "start-year", 2018, "Star year for data generation")
 }
