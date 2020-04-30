@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -40,11 +41,13 @@ func setUpLogs(out io.Writer, level string) error {
 }
 
 func init() {
-	cobra.OnInitialize()
-	viper.SetEnvPrefix("azp") // Set the environment prefix to AZP_*
-	viper.AutomaticEnv()      // Automatically search for environment variables
-	replacer := strings.NewReplacer("-", "_")
-	viper.SetEnvKeyReplacer(replacer)
+	cobra.OnInitialize(func() {
+		viper.SetEnvPrefix("azp") // Set the environment prefix to AZP_*
+		viper.AutomaticEnv()      // Automatically search for environment variables
+		replacer := strings.NewReplacer("-", "_")
+		viper.SetEnvKeyReplacer(replacer)
+		postInitCommands(rootCmd.Commands())
+	})
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		if err := setUpLogs(os.Stdout, v); err != nil {
@@ -53,4 +56,22 @@ func init() {
 		return nil
 	}
 	rootCmd.PersistentFlags().StringVarP(&v, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic")
+}
+
+func postInitCommands(commands []*cobra.Command) {
+	for _, cmd := range commands {
+		presetRequiredFlags(cmd)
+		if cmd.HasSubCommands() {
+			postInitCommands(cmd.Commands())
+		}
+	}
+}
+
+func presetRequiredFlags(cmd *cobra.Command) {
+	viper.BindPFlags(cmd.Flags())
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if viper.IsSet(f.Name) && viper.GetString(f.Name) != "" {
+			cmd.Flags().Set(f.Name, viper.GetString(f.Name))
+		}
+	})
 }
