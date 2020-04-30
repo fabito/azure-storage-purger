@@ -23,11 +23,9 @@ func init() {
 	rootCmd.AddCommand(tableCmd)
 
 	tableCmd.PersistentFlags().String("account-name", "", "The storage account name")
-	// tableCmd.MarkPersistentFlagRequired("account-name")
 	viper.BindPFlag("account-name", tableCmd.PersistentFlags().Lookup("account-name"))
 
 	tableCmd.PersistentFlags().String("account-key", "", "The storage account key")
-	// tableCmd.MarkPersistentFlagRequired("account-key")
 	viper.BindPFlag("account-key", tableCmd.PersistentFlags().Lookup("account-key"))
 
 	tableCmd.PersistentFlags().StringVar(&tableName, "table-name", "", "The storage table name")

@@ -30,28 +30,28 @@ var purgeCmd = &cobra.Command{
 		accountName := viper.GetString("account-name")
 		accountKey := viper.GetString("account-key")
 
-		purger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInHours, numWorkers, usePool, dryRun)
+		tablePurger, err := purger.NewTablePurger(accountName, accountKey, tableName, purgeEntitiesOlderThanDays, periodLengthInHours, numWorkers, usePool, dryRun)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		period, err := util.ParsePeriod(startDate, endDate)
-		if err != nil {
-			result, err := purger.PurgeEntities()
-			if err != nil {
-				log.Fatal(err)
-			}
-			if result.HasErrors() {
-				os.Exit(1)
-			}
+		var result purger.PurgeResult
+		if startDate == "" && endDate == "" {
+			result, err = tablePurger.PurgeEntities()
 		} else {
-			result, err := purger.PurgeEntitiesWithin(period)
+			period, err := util.ParsePeriod(startDate, endDate)
 			if err != nil {
 				log.Fatal(err)
 			}
-			if result.HasErrors() {
-				os.Exit(1)
-			}
+			result, err = tablePurger.PurgeEntitiesWithin(period)
+		}
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if result.HasErrors() {
+			os.Exit(1)
 		}
 
 	},
