@@ -4,7 +4,7 @@ Command line utility for purging data from Azure Storage Tables
 
 **Important:** Only works for tables using "ticks ascending with leading zero padded with zeroes" as `PartitionKey`
 
-Deleting lots of entities is very time consuming - we have to fetch first in order to delete them. Ideally we should partition the data into multiple tables (i.e. daily, monthly) then there is no need to fetch entities, entire tables can be deleted.
+Deleting lots of entities is very time consuming - we have to fetch first in order to delete them. Ideally we should partition the data into multiple tables (i.e. daily, monthly) then there is no need to fetch entities and entire tables can be deleted.
 
 ## Usage
 
