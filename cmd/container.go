@@ -23,9 +23,4 @@ func init() {
 	containerCmd.PersistentFlags().String("account-key", "", "The storage account key")
 	viper.BindPFlag("account-key", containerCmd.PersistentFlags().Lookup("account-key"))
 
-	// containerCmd.PersistentFlags().StringVar(&tableName, "table-name", "", "The storage table name")
-	// containerCmd.MarkPersistentFlagRequired("table-name")
-
-	// containerCmd.PersistentFlags().IntVar(&numWorkers, "num-workers", runtime.NumCPU()*4, "Number of workers. Default is cpus * 4")
-
 }

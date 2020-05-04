@@ -50,7 +50,7 @@ func (c *StatsGatherer) forEachBlobInContainer(container *storage.Container, cb 
 	listParams := storage.ListBlobsParameters{}
 	response, err := container.ListBlobs(listParams)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Error listing blobs for %s. %s", container.Name, err)
 		return err
 	}
 	for _, blob := range response.Blobs {
@@ -61,7 +61,7 @@ func (c *StatsGatherer) forEachBlobInContainer(container *storage.Container, cb 
 		listParams = storage.ListBlobsParameters{Marker: response.NextMarker}
 		response, err = container.ListBlobs(listParams)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("Error retrieving marker %s for %s. %s", response.NextMarker, container.Name, err)
 			return err
 		}
 		for _, blob := range response.Blobs {
@@ -79,13 +79,17 @@ func (c *StatsGatherer) computeStats(container *storage.Container) (Stats, error
 	sizer := func(blob storage.Blob) {
 		totalSize += blob.Properties.ContentLength
 		blobCount++
+		if blobCount%10000 == 0 {
+			log.Debugf("Visited %s blobs in %s = %s", humanize.Comma(blobCount), container.Name, humanize.Bytes(uint64(totalSize)))
+		}
+
 	}
 	err := c.forEachBlobInContainer(container, sizer)
+	ct.BlobCount = blobCount
+	ct.Size = uint64(totalSize)
 	if err != nil {
 		return ct, err
 	}
-	ct.BlobCount = blobCount
-	ct.Size = uint64(totalSize)
 	log.Info(ct)
 	return ct, nil
 }
@@ -99,7 +103,7 @@ type Stats struct {
 	Newest    time.Time
 }
 
-func (c Stats) string() string {
+func (c Stats) String() string {
 	return fmt.Sprintf("%s contains %s blob(s) using a total of %s", c.Name, humanize.Comma(c.BlobCount), humanize.Bytes(c.Size))
 }
 
@@ -117,7 +121,10 @@ func (c *StatsGatherer) GatherStatistics() ([]Stats, error) {
 	for w := 1; w <= numWorkers; w++ {
 		go func(id int, done chan interface{}, jobs chan storage.Container, results chan Stats) {
 			for j := range jobs {
+				log.Debugf("Worker %d started job %s", id, j.Name)
+				start := time.Now().UTC()
 				ct, _ := c.computeStats(&j)
+				log.Debugf("Worker %d finished job %s in %s", id, j.Name, time.Since(start))
 				select {
 				case <-done:
 					return
@@ -137,7 +144,6 @@ func (c *StatsGatherer) GatherStatistics() ([]Stats, error) {
 	close(jobs)
 
 	containers := make([]Stats, numJobs)
-
 	for result := range results {
 		containers = append(containers, result)
 	}

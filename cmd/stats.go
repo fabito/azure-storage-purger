@@ -12,7 +12,7 @@ var ()
 // statsCmd represents the stats command
 var statsCmd = &cobra.Command{
 	Use:   "stats",
-	Short: "Gather statistics about all containers in a Storage Account",
+	Short: "(Experimental) Gather statistics about all containers in a Storage Account",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 
